@@ -61,7 +61,7 @@ export interface SystemConfig {
   academicYear: string;
   digitalTutorName: string;
   deviceTeacherName: string;
-  userRole: 'tutor' | 'teacher' | 'admin';
+  userRole: 'tutor' | 'teacher';
   customGrades?: number[];
   customClasses?: Record<number, number[]>; // grade -> list of class numbers
   customSpecialRooms?: string[];

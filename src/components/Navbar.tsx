@@ -83,21 +83,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             </div>
 
-            {/* Role Switcher */}
-            <div className="flex items-center space-x-1.5 bg-purple-800 px-2.5 py-1 rounded-lg border border-purple-700">
+            {/* Role Badge */}
+            <div className="flex items-center space-x-1.5 bg-purple-800/90 px-2.5 py-1 rounded-lg border border-purple-700">
               <div className="w-5 h-5 rounded-full bg-purple-700 flex items-center justify-center text-[10px] font-bold text-purple-200">
                 DT
               </div>
-              <select
-                id="user-role-select"
-                aria-label="사용자 권한 선택"
-                value={systemConfig.userRole}
-                onChange={(e) => updateSystemConfig({ userRole: e.target.value as any })}
-                className="bg-transparent text-white font-bold focus:outline-none cursor-pointer text-xs"
-              >
-                <option value="tutor" className="bg-slate-900 text-white">디지털 튜터 (관리권한)</option>
-                <option value="teacher" className="bg-slate-900 text-white">담당 교사 (조회/보고)</option>
-              </select>
+              <span className="text-white font-bold text-xs">
+                디지털 튜터 (관리권한)
+              </span>
             </div>
           </div>
         </div>

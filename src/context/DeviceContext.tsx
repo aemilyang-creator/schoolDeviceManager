@@ -369,25 +369,34 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // 1. Update system config classes
     setSystemConfig((prev) => {
-      const currentClasses = prev.customClasses || {
-        1: [1, 2, 3, 4, 5],
-        2: [1, 2, 3, 4, 5],
-        3: [1, 2, 3, 4, 5],
-        4: [1, 2, 3, 4, 5, 6],
-        5: [1, 2, 3, 4, 5, 6],
-        6: [1, 2, 3, 4, 5, 6],
+      const currentGrades = prev.customGrades && prev.customGrades.length > 0
+        ? [...prev.customGrades]
+        : [1, 2, 3, 4, 5, 6];
+      const nextGrades = currentGrades.includes(grade)
+        ? currentGrades
+        : [...currentGrades, grade].sort((a, b) => a - b);
+
+      const currentClasses: Record<number, number[]> = {
+        ...(prev.customClasses || {
+          1: [1, 2, 3, 4, 5],
+          2: [1, 2, 3, 4, 5],
+          3: [1, 2, 3, 4, 5],
+          4: [1, 2, 3, 4, 5, 6],
+          5: [1, 2, 3, 4, 5, 6],
+          6: [1, 2, 3, 4, 5, 6],
+        }),
       };
       const gradeClasses = currentClasses[grade] ? [...currentClasses[grade]] : [];
       if (!gradeClasses.includes(classNum)) {
         gradeClasses.push(classNum);
         gradeClasses.sort((a, b) => a - b);
       }
+      currentClasses[grade] = gradeClasses;
+
       return {
         ...prev,
-        customClasses: {
-          ...currentClasses,
-          [grade]: gradeClasses,
-        },
+        customGrades: nextGrades,
+        customClasses: currentClasses,
       };
     });
 
@@ -441,58 +450,109 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const locName = `${grade}학년 ${classNum}반`;
 
     // 1. Remove devices in this class
-    setDevices((prev) => prev.filter((d) => d.location !== locName));
+    setDevices((prev) => prev.filter((d) => d.location !== locName && !(d.grade === grade && d.classNum === classNum)));
 
     // 2. Remove consumables for this class
     setConsumables((prev) => prev.filter((c) => c.location !== locName));
 
     // 3. Update config
     setSystemConfig((prev) => {
-      const currentClasses = prev.customClasses || {
-        1: [1, 2, 3, 4, 5],
-        2: [1, 2, 3, 4, 5],
-        3: [1, 2, 3, 4, 5],
-        4: [1, 2, 3, 4, 5, 6],
-        5: [1, 2, 3, 4, 5, 6],
-        6: [1, 2, 3, 4, 5, 6],
-      };
-      const gradeClasses = currentClasses[grade] ? currentClasses[grade].filter((c) => c !== classNum) : [];
-      return {
-        ...prev,
-        customClasses: {
-          ...currentClasses,
-          [grade]: gradeClasses,
-        },
-      };
-    });
-  };
-
-  const addGrade = (grade: number) => {
-    setSystemConfig((prev) => {
-      const currentGrades = prev.customGrades || [1, 2, 3, 4, 5, 6];
-      if (!currentGrades.includes(grade)) {
-        const nextGrades = [...currentGrades, grade].sort((a, b) => a - b);
-        const currentClasses = prev.customClasses || {
+      const currentClasses: Record<number, number[]> = {
+        ...(prev.customClasses || {
           1: [1, 2, 3, 4, 5],
           2: [1, 2, 3, 4, 5],
           3: [1, 2, 3, 4, 5],
           4: [1, 2, 3, 4, 5, 6],
           5: [1, 2, 3, 4, 5, 6],
           6: [1, 2, 3, 4, 5, 6],
-        };
-        if (!currentClasses[grade]) {
-          currentClasses[grade] = [1];
-        }
-        return {
-          ...prev,
-          customGrades: nextGrades,
-          customClasses: { ...currentClasses },
-        };
-      }
-      return prev;
+        }),
+      };
+      const gradeClasses = currentClasses[grade] ? currentClasses[grade].filter((c) => c !== classNum) : [];
+      currentClasses[grade] = gradeClasses;
+
+      return {
+        ...prev,
+        customClasses: currentClasses,
+      };
     });
-    // Also create 1반 for this grade
-    addClass(grade, 1, true);
+  };
+
+  const addGrade = (grade: number) => {
+    const locName = `${grade}학년 1반`;
+    const now = new Date().toISOString().split('T')[0];
+
+    // 1. Atomically update system config with the new grade and its 1반
+    setSystemConfig((prev) => {
+      const currentGrades = prev.customGrades && prev.customGrades.length > 0
+        ? [...prev.customGrades]
+        : [1, 2, 3, 4, 5, 6];
+      const nextGrades = currentGrades.includes(grade)
+        ? currentGrades
+        : [...currentGrades, grade].sort((a, b) => a - b);
+
+      const currentClasses: Record<number, number[]> = {
+        ...(prev.customClasses || {
+          1: [1, 2, 3, 4, 5],
+          2: [1, 2, 3, 4, 5],
+          3: [1, 2, 3, 4, 5],
+          4: [1, 2, 3, 4, 5, 6],
+          5: [1, 2, 3, 4, 5, 6],
+          6: [1, 2, 3, 4, 5, 6],
+        }),
+      };
+      if (!currentClasses[grade] || currentClasses[grade].length === 0) {
+        currentClasses[grade] = [1];
+      }
+
+      return {
+        ...prev,
+        customGrades: nextGrades,
+        customClasses: currentClasses,
+      };
+    });
+
+    // 2. Add consumable record for 1반
+    setConsumables((prev) => {
+      if (prev.some((c) => c.location === locName)) return prev;
+      return [
+        ...prev,
+        {
+          id: `cons-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+          location: locName,
+          deviceType: 'mouse',
+          mouseWiredCount: 0,
+          mouseWirelessCount: 20,
+          earphoneCount: 20,
+          mouseSpareCount: 0,
+          earphoneSpareCount: 0,
+          requestMemo: '',
+          updatedAt: now,
+        },
+      ];
+    });
+
+    // 3. Auto-generate 1~20 Chromebooks for the new grade's 1반
+    const newDevs: Device[] = [];
+    for (let i = 1; i <= 20; i++) {
+      newDevs.push({
+        id: `device-cb-${grade}-1-${i}-${Date.now()}`,
+        deviceType: 'chromebook',
+        managementNumber: '',
+        classDeviceNumber: i,
+        deviceName: '삼성 갤럭시 크롬북',
+        modelName: 'Galaxy Chromebook 2 360',
+        manufacturer: '삼성전자',
+        location: locName,
+        grade,
+        classNum: 1,
+        status: 'normal',
+        createdAt: now,
+        updatedAt: now,
+        note: `학생 배정용 (${locName} ${i}번)`,
+        history: [],
+      });
+    }
+    setDevices((prev) => [...prev, ...newDevs]);
   };
 
   const deleteGrade = (grade: number) => {
@@ -504,10 +564,22 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // 3. Update config
     setSystemConfig((prev) => {
-      const currentGrades = prev.customGrades || [1, 2, 3, 4, 5, 6];
+      const currentGrades = prev.customGrades && prev.customGrades.length > 0
+        ? [...prev.customGrades]
+        : [1, 2, 3, 4, 5, 6];
       const nextGrades = currentGrades.filter((g) => g !== grade);
-      const currentClasses = { ...(prev.customClasses || {}) };
+      const currentClasses: Record<number, number[]> = {
+        ...(prev.customClasses || {
+          1: [1, 2, 3, 4, 5],
+          2: [1, 2, 3, 4, 5],
+          3: [1, 2, 3, 4, 5],
+          4: [1, 2, 3, 4, 5, 6],
+          5: [1, 2, 3, 4, 5, 6],
+          6: [1, 2, 3, 4, 5, 6],
+        }),
+      };
       delete currentClasses[grade];
+
       return {
         ...prev,
         customGrades: nextGrades,
@@ -575,6 +647,10 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         updateConsumableCount,
         updateConsumableMemo,
         updateSystemConfig,
+        addClass,
+        deleteClass,
+        addGrade,
+        deleteGrade,
         resetToDefaultData,
         exportDataToJson,
         importDataFromJson,
