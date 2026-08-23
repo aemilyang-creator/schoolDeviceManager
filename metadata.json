@@ -1,0 +1,6 @@
+{
+  "name": "학교 디지털기기 관리 시스템",
+  "description": "크롬북·마우스·이어폰 등 학교 디지털 기기 현황, 학급별 배정 및 수리 상태를 효율적으로 관리하는 대시보드 웹앱",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
