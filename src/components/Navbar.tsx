@@ -97,7 +97,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <option value="tutor" className="bg-slate-900 text-white">디지털 튜터 (관리권한)</option>
                 <option value="teacher" className="bg-slate-900 text-white">담당 교사 (조회/보고)</option>
-                <option value="admin" className="bg-slate-900 text-white">시스템 관리자 (전체)</option>
               </select>
             </div>
           </div>
