@@ -129,24 +129,19 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
 
   // Find consumable record for current location
   const currentConsumable = useMemo(() => {
-    return consumables.find((c) => {
-      if (selectedGrade === 'special') {
-        return c.location === '스마트실' || c.location.includes('컴퓨터') || c.location.includes('스마트');
-      }
-      return c.location === currentLocation;
-    }) || {
-      id: `temp-${currentLocation}`,
+    return consumables.find((c) => c.location === currentLocation) || {
+      id: `cons-smart-temp`,
       location: currentLocation,
       deviceType: 'mouse' as const,
       mouseWiredCount: 0,
-      mouseWirelessCount: 20,
-      earphoneCount: 20,
+      mouseWirelessCount: 25,
+      earphoneCount: 25,
       mouseSpareCount: 0,
       earphoneSpareCount: 0,
       requestMemo: '',
       updatedAt: '',
     };
-  }, [consumables, currentLocation, selectedGrade]);
+  }, [consumables, currentLocation]);
 
   // Memo editing state
   const [memoText, setMemoText] = useState<string>('');
@@ -161,8 +156,15 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
   }, [currentConsumable, currentLocation]);
 
   const handleSaveMemo = () => {
-    if (currentConsumable.id) {
+    if (currentConsumable.id && !currentConsumable.id.startsWith('cons-smart-temp')) {
       updateConsumableMemo(currentConsumable.id, memoText);
+      setIsEditingMemo(false);
+    } else {
+      // If temporary consumable record, find or update
+      const existing = consumables.find((c) => c.location === currentLocation);
+      if (existing) {
+        updateConsumableMemo(existing.id, memoText);
+      }
       setIsEditingMemo(false);
     }
   };
@@ -430,7 +432,6 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
               id="tab-grade-special"
               onClick={() => {
                 setSelectedGrade('special');
-                setSelectedSpecialRoom(specialRooms[0] || '제1컴퓨터실');
               }}
               className={`px-5 py-2.5 rounded-2xl text-sm font-black transition-all shrink-0 cursor-pointer ${
                 selectedGrade === 'special'
@@ -438,7 +439,7 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              특별실 / 보관실
+              스마트실
             </button>
 
             {/* Add Grade Button */}
@@ -448,72 +449,55 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
                 setNewGradeInput(String(nextGrade));
                 setShowAddGradeModal(true);
               }}
-              className="px-3.5 py-2 rounded-2xl border-2 border-dashed border-purple-300 bg-purple-50/60 text-purple-800 hover:bg-purple-100 text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              className="px-4 py-2 rounded-2xl border-2 border-dashed border-purple-300 bg-purple-50/60 text-purple-800 hover:bg-purple-100 text-xs font-bold transition-all shrink-0 flex items-center gap-1 cursor-pointer shadow-2xs"
               title="새 학년 추가"
             >
-              <Plus className="w-3.5 h-3.5 text-purple-700" />
-              <span>+ 학년 추가</span>
+              <span className="text-base font-black text-purple-700 leading-none mr-0.5">+</span>
+              <span>학년 추가</span>
             </button>
           </div>
         </div>
 
-        {/* Class or Special Room Sub-buttons */}
-        <div className="pt-3 border-t border-slate-100">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              {selectedGrade !== 'special' ? `${selectedGrade}학년 학급 선택` : '특별실 / 보관실 선택'}
+        {/* Class Sub-buttons (Only for standard grades, removed for 스마트실) */}
+        {selectedGrade !== 'special' && (
+          <div className="pt-3 border-t border-slate-100">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                {selectedGrade}학년 학급 선택
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center space-x-2 overflow-x-auto pb-1">
-            {selectedGrade !== 'special' ? (
-              <>
-                {currentGradeClasses.map((classNum) => (
-                  <button
-                    key={classNum}
-                    id={`btn-class-${selectedGrade}-${classNum}`}
-                    onClick={() => setSelectedClassNum(classNum)}
-                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all shrink-0 cursor-pointer ${
-                      selectedClassNum === classNum
-                        ? 'bg-purple-800 text-white shadow-sm'
-                        : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
-                    }`}
-                  >
-                    {classNum}반
-                  </button>
-                ))}
-                {/* + 반 추가 Button directly next to class buttons */}
+            <div className="flex items-center space-x-2 overflow-x-auto pb-1">
+              {currentGradeClasses.map((classNum) => (
                 <button
-                  onClick={() => {
-                    const nextNum = currentGradeClasses.length > 0 ? Math.max(...currentGradeClasses) + 1 : 1;
-                    addClass(selectedGrade, nextNum, true);
-                    setSelectedClassNum(nextNum);
-                  }}
-                  className="px-3.5 py-2 rounded-xl border-2 border-dashed border-purple-300 bg-purple-50/60 text-purple-800 hover:bg-purple-100 text-xs font-bold transition-all shrink-0 flex items-center gap-1 cursor-pointer shadow-2xs"
-                  title={`${selectedGrade}학년에 다음 반(${currentGradeClasses.length > 0 ? Math.max(...currentGradeClasses) + 1 : 1}반) 즉시 추가 (1~20번 크롬북 자동 생성)`}
-                >
-                  <Plus className="w-3.5 h-3.5 text-purple-700" />
-                  <span>+ 반 추가</span>
-                </button>
-              </>
-            ) : (
-              specialRooms.map((room) => (
-                <button
-                  key={room}
-                  id={`btn-room-${room}`}
-                  onClick={() => setSelectedSpecialRoom(room)}
+                  key={classNum}
+                  id={`btn-class-${selectedGrade}-${classNum}`}
+                  onClick={() => setSelectedClassNum(classNum)}
                   className={`px-4 py-2 rounded-xl text-xs font-black transition-all shrink-0 cursor-pointer ${
-                    selectedSpecialRoom === room
+                    selectedClassNum === classNum
                       ? 'bg-purple-800 text-white shadow-sm'
                       : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
                   }`}
                 >
-                  {room}
+                  {classNum}반
                 </button>
-              ))
-            )}
+              ))}
+              {/* + 반 추가 Button directly next to class buttons */}
+              <button
+                onClick={() => {
+                  const nextNum = currentGradeClasses.length > 0 ? Math.max(...currentGradeClasses) + 1 : 1;
+                  addClass(selectedGrade, nextNum, true);
+                  setSelectedClassNum(nextNum);
+                }}
+                className="px-3.5 py-2 rounded-xl border-2 border-dashed border-purple-300 bg-purple-50/60 text-purple-800 hover:bg-purple-100 text-xs font-bold transition-all shrink-0 flex items-center gap-1 cursor-pointer shadow-2xs"
+                title={`${selectedGrade}학년에 다음 반(${currentGradeClasses.length > 0 ? Math.max(...currentGradeClasses) + 1 : 1}반) 즉시 추가 (1~20번 크롬북 자동 생성)`}
+              >
+                <span className="text-base font-black text-purple-700 leading-none mr-0.5">+</span>
+                <span>반 추가</span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* 🌟 USER REQUEST: "각반에 들어가도 정상 수리중 고장이 학년반 밑에 보이도록 해주세요" */}
         <div className="pt-4 border-t border-slate-100">
@@ -749,14 +733,14 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
               <textarea
                 value={memoText}
                 onChange={(e) => setMemoText(e.target.value)}
-                placeholder="예: 마우스 2개 교체 필요, 이어폰 젠더 추가 요망 등..."
-                rows={2}
-                className="w-full text-xs p-3 rounded-2xl border border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-900 bg-purple-50/20 font-medium"
+                placeholder="예: 마우스 2개 교체 필요&#10;이어폰 젠더 추가 요망 등..."
+                rows={3}
+                className="w-full text-xs p-3 rounded-2xl border border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-900 bg-purple-50/20 font-medium whitespace-pre-wrap"
               />
             ) : (
               <div 
                 onClick={() => setIsEditingMemo(true)}
-                className="text-xs p-3 rounded-2xl bg-slate-50 border border-slate-200 text-slate-700 min-h-[48px] cursor-pointer hover:bg-purple-50/30 transition-colors font-medium"
+                className="text-xs p-3 rounded-2xl bg-slate-50 border border-slate-200 text-slate-700 min-h-[48px] cursor-pointer hover:bg-purple-50/30 transition-colors font-medium whitespace-pre-line break-words"
               >
                 {currentConsumable.requestMemo ? (
                   <span className="text-slate-900 font-semibold">{currentConsumable.requestMemo}</span>

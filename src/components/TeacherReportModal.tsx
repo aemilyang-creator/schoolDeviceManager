@@ -297,7 +297,7 @@ ${requestedConsumables.map((c) => ` • [${c.location}] ${c.requestMemo}`).join(
                 requestedConsumables.map((c) => (
                   <div key={c.id} className="flex items-start space-x-2 text-xs">
                     <span className="font-black text-purple-950 min-w-[90px]">[{c.location}]</span>
-                    <span className="text-slate-800 font-medium">{c.requestMemo}</span>
+                    <span className="text-slate-800 font-medium whitespace-pre-line break-words">{c.requestMemo}</span>
                   </div>
                 ))
               )}

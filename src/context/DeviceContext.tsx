@@ -103,7 +103,16 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.CONSUMABLES);
       if (saved) {
-        return JSON.parse(saved);
+        const parsed: ConsumableInventory[] = JSON.parse(saved);
+        // Cleanly migrate legacy '제1컴퓨터실', '제2컴퓨터실', 'AI 스마트교실' to '스마트실' if needed
+        let hasSmart = parsed.some(c => c.location === '스마트실');
+        if (!hasSmart) {
+          const legacySpecial = parsed.find(c => c.location === '제1컴퓨터실' || c.location.includes('컴퓨터') || c.location.includes('스마트'));
+          if (legacySpecial) {
+            legacySpecial.location = '스마트실';
+          }
+        }
+        return parsed;
       }
     } catch (e) {
       console.error('Failed to load consumables from storage', e);

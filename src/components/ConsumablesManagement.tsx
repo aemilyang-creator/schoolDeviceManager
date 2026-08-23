@@ -165,7 +165,7 @@ export const ConsumablesManagement: React.FC = () => {
               <option value="4학년">4학년</option>
               <option value="5학년">5학년</option>
               <option value="6학년">6학년</option>
-              <option value="special">특별실 / 보관실</option>
+              <option value="special">스마트실</option>
             </select>
           </div>
         </div>

@@ -17,11 +17,7 @@ export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
     6: [1, 2, 3, 4, 5, 6],
   },
   customSpecialRooms: [
-    '제1컴퓨터실',
-    '제2컴퓨터실',
-    'AI 스마트교실',
-    '디지털기기 보관실',
-    '예비 보관실'
+    '스마트실'
   ]
 };
 
@@ -221,10 +217,10 @@ export function generateInitialConsumables(): ConsumableInventory[] {
       locations.push(`${g}학년 ${c}반`);
     }
   }
-  locations.push('제1컴퓨터실', '제2컴퓨터실', 'AI 스마트교실', '소모품 보관실');
+  locations.push('스마트실', '소모품 보관실');
 
   // Let's accurately distribute to match exactly 705 Mice (126 wired, 579 wireless) and 389 earphones
-  // 33 classrooms + 3 computer/AI labs + 1 storage = 37 locations
+  // 33 classrooms + 1 smart room + 1 storage = 35 locations
   let remainingWired = 126;
   let remainingWireless = 579;
   let remainingEarphones = 389;
@@ -242,16 +238,11 @@ export function generateInitialConsumables(): ConsumableInventory[] {
       remainingWired = 0;
       remainingWireless = 0;
       remainingEarphones = 0;
-    } else if (loc.includes('컴퓨터실')) {
-      wired = 25; // Wired mice for computer labs
-      wireless = 0;
-      earphone = 25;
-      remainingWired -= wired;
-      remainingEarphones -= earphone;
-    } else if (loc.includes('AI 스마트교실')) {
-      wired = 0;
+    } else if (loc === '스마트실') {
+      wired = 25; // Wired/wireless for smart room
       wireless = 25;
-      earphone = 25;
+      earphone = 30;
+      remainingWired -= wired;
       remainingWireless -= wireless;
       remainingEarphones -= earphone;
     } else {

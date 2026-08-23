@@ -42,6 +42,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const issueDevices = devices.filter((d) => d.status === 'repair' || d.status === 'broken');
   const brokenDevices = devices.filter((d) => d.status === 'broken');
   const repairDevices = devices.filter((d) => d.status === 'repair');
+  const requestedConsumables = consumables.filter((c) => c.requestMemo && c.requestMemo.trim() !== '');
 
   // Quick adjust total consumables via storage room
   const handleQuickAdjust = (type: 'mouse' | 'earphone', delta: number) => {
@@ -101,7 +102,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* BIG HERO CARD: 8 COLS */}
         <div className="col-span-12 lg:col-span-8 bg-gradient-to-br from-purple-400 to-purple-500 rounded-3xl p-6 sm:p-8 text-white flex flex-col justify-between shadow-lg shadow-purple-100 border border-purple-300/30">
           <div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <h3 className="text-base sm:text-lg font-bold opacity-95 tracking-wide">
                 사용 가능한 크롬북
               </h3>
@@ -109,12 +110,66 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 실시간 가동 지표
               </span>
             </div>
-            <p className="text-6xl sm:text-8xl lg:text-[110px] font-black leading-none tracking-tighter mt-3 sm:mt-5 drop-shadow-xs font-sans">
-              {stats.chromebook.normal.toLocaleString()}
-              <span className="text-xl sm:text-2xl font-normal opacity-70 ml-3 sm:ml-4 tracking-normal font-sans">
-                / {stats.chromebook.total.toLocaleString()} TOTAL
-              </span>
-            </p>
+
+            {/* Grid for Big Count & Rectangular Notepad */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6 items-center mt-3 sm:mt-4">
+              {/* Left: Big Number Count */}
+              <div className="md:col-span-6 lg:col-span-7">
+                <p className="text-5xl sm:text-7xl lg:text-[76px] xl:text-[88px] font-black leading-none tracking-tighter drop-shadow-xs font-sans">
+                  {stats.chromebook.normal.toLocaleString()}
+                  <span className="text-lg sm:text-2xl font-normal opacity-75 ml-2 sm:ml-3 tracking-normal font-sans">
+                    / {stats.chromebook.total.toLocaleString()} TOTAL
+                  </span>
+                </p>
+                <p className="text-xs text-white/80 font-semibold mt-2 sm:mt-2.5">
+                  정상 가동 가능 학생용 크롬북
+                </p>
+              </div>
+
+              {/* Right: Rectangular Notepad below '실시간 가동 지표' with dark purple text & preserve newlines */}
+              <div className="md:col-span-6 lg:col-span-5 bg-white/95 backdrop-blur-md rounded-2xl p-3.5 border border-purple-200/80 shadow-md flex flex-col">
+                <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-purple-100">
+                  <div className="flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-purple-950" />
+                    <span className="text-xs font-black tracking-tight text-purple-950">학급별 소모품 요청 및 건의</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-950 text-white shadow-2xs">
+                    {requestedConsumables.length}건
+                  </span>
+                </div>
+
+                {/* Scrollable List with custom scrollbar */}
+                <div className="max-h-28 sm:max-h-32 overflow-y-auto space-y-1.5 pr-1 custom-memo-scroll text-xs">
+                  {requestedConsumables.length === 0 ? (
+                    <div className="py-3 text-center text-purple-900/60">
+                      <p className="text-xs font-medium">등록된 소모품 요청 및 건의사항이 없습니다.</p>
+                    </div>
+                  ) : (
+                    requestedConsumables.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => onNavigateTab('consumables')}
+                        className="bg-purple-50/80 hover:bg-purple-100/90 rounded-xl p-2.5 transition-all cursor-pointer border border-purple-200/70 group/memo shadow-2xs"
+                        title="소모품 관리로 이동"
+                      >
+                        <div className="flex items-center justify-between text-[11px] font-black text-purple-950 mb-1">
+                          <span className="flex items-center gap-1">
+                            <span>📍</span>
+                            <span>{item.location}</span>
+                          </span>
+                          {item.updatedAt && (
+                            <span className="text-[10px] text-purple-900/70 font-semibold font-mono">{item.updatedAt}</span>
+                          )}
+                        </div>
+                        <p className="text-purple-950 text-xs leading-relaxed font-semibold whitespace-pre-line break-words">
+                          {item.requestMemo}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mt-8 pt-6 border-t border-white/25">
