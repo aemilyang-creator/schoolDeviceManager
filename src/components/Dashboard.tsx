@@ -99,34 +99,34 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {/* 2. MAIN BOLD HERO GRID */}
       <div className="grid grid-cols-12 gap-6">
         {/* BIG HERO CARD: 8 COLS */}
-        <div className="col-span-12 lg:col-span-8 bg-purple-600 rounded-3xl p-6 sm:p-8 text-white flex flex-col justify-between shadow-xl shadow-purple-200/80 border border-purple-500/30">
+        <div className="col-span-12 lg:col-span-8 bg-gradient-to-br from-purple-400 to-purple-500 rounded-3xl p-6 sm:p-8 text-white flex flex-col justify-between shadow-lg shadow-purple-100 border border-purple-300/30">
           <div>
             <div className="flex items-center justify-between">
-              <h3 className="text-base sm:text-lg font-bold opacity-90 tracking-wide">
+              <h3 className="text-base sm:text-lg font-bold opacity-95 tracking-wide">
                 사용 가능한 크롬북
               </h3>
-              <span className="bg-white/15 text-white border border-white/20 text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider backdrop-blur-xs">
+              <span className="bg-white/20 text-white border border-white/30 text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider backdrop-blur-xs">
                 실시간 가동 지표
               </span>
             </div>
             <p className="text-6xl sm:text-8xl lg:text-[110px] font-black leading-none tracking-tighter mt-3 sm:mt-5 drop-shadow-xs font-sans">
               {stats.chromebook.normal.toLocaleString()}
-              <span className="text-xl sm:text-2xl font-normal opacity-50 ml-3 sm:ml-4 tracking-normal font-sans">
+              <span className="text-xl sm:text-2xl font-normal opacity-70 ml-3 sm:ml-4 tracking-normal font-sans">
                 / {stats.chromebook.total.toLocaleString()} TOTAL
               </span>
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mt-8 pt-6 border-t border-purple-500/40">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mt-8 pt-6 border-t border-white/25">
             <div className="flex gap-8 sm:gap-12">
               <div>
-                <p className="text-xs uppercase opacity-75 font-bold tracking-wider mb-1">수리 중</p>
+                <p className="text-xs uppercase opacity-85 font-bold tracking-wider mb-1">수리 중</p>
                 <p className="text-2xl sm:text-3xl font-black font-mono">
                   {String(stats.chromebook.repair).padStart(2, '0')}
                 </p>
               </div>
               <div>
-                <p className="text-xs uppercase opacity-75 font-bold tracking-wider mb-1">고장 (불가)</p>
+                <p className="text-xs uppercase opacity-85 font-bold tracking-wider mb-1">고장 (불가)</p>
                 <p className="text-2xl sm:text-3xl font-black font-mono">
                   {String(stats.chromebook.broken).padStart(2, '0')}
                 </p>
@@ -134,12 +134,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
 
             <div className="flex items-center space-x-3">
-              <div className="bg-white/10 px-4 py-2 rounded-full text-xs sm:text-sm font-bold backdrop-blur-md border border-white/20 text-white">
+              <div className="bg-white/15 px-4 py-2 rounded-full text-xs sm:text-sm font-bold backdrop-blur-md border border-white/25 text-white">
                 가동률 {stats.chromebook.operationalRate}%
               </div>
               <button
                 onClick={() => onNavigateTab('classes')}
-                className="bg-white text-purple-900 hover:bg-purple-50 px-4 py-2 rounded-full text-xs font-bold transition-transform active:scale-95 shadow-md flex items-center gap-1"
+                className="bg-white text-purple-700 hover:bg-purple-50 px-4 py-2 rounded-full text-xs font-bold transition-transform active:scale-95 shadow-sm flex items-center gap-1"
               >
                 <span>학급별 보기</span>
                 <ChevronRight className="w-3.5 h-3.5" />
@@ -173,7 +173,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <button
                   onClick={() => handleQuickAdjust('mouse', 1)}
                   title="수량 1 증가"
-                  className="w-8 h-8 rounded-lg bg-purple-100 hover:bg-purple-200 flex items-center justify-center text-purple-700 font-bold transition-colors cursor-pointer"
+                  className="w-8 h-8 rounded-lg bg-purple-50 hover:bg-purple-100 flex items-center justify-center text-purple-600 font-bold transition-colors cursor-pointer"
                 >
                   +
                 </button>
@@ -210,7 +210,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <button
                   onClick={() => handleQuickAdjust('earphone', 1)}
                   title="수량 1 증가"
-                  className="w-8 h-8 rounded-lg bg-purple-100 hover:bg-purple-200 flex items-center justify-center text-purple-700 font-bold transition-colors cursor-pointer"
+                  className="w-8 h-8 rounded-lg bg-purple-50 hover:bg-purple-100 flex items-center justify-center text-purple-600 font-bold transition-colors cursor-pointer"
                 >
                   +
                 </button>
@@ -235,7 +235,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider">
                 제조사별 크롬북 대수
               </h4>
-              <span className="text-xs font-mono font-bold text-purple-800 bg-purple-50 px-2 py-0.5 rounded">
+              <span className="text-xs font-mono font-bold text-purple-700 bg-purple-50/80 px-2 py-0.5 rounded">
                 총 {stats.chromebook.total}대
               </span>
             </div>
@@ -251,7 +251,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <div className="flex-1 mx-3 sm:mx-4 h-2 sm:h-2.5 bg-slate-100 rounded-full overflow-hidden">
                       <div
                         style={{ width: `${pct}%` }}
-                        className="h-full bg-purple-500 rounded-full transition-all duration-500"
+                        className="h-full bg-purple-400 rounded-full transition-all duration-500"
                       />
                     </div>
                     <span className="text-xs sm:text-sm font-black text-slate-800 font-mono w-16 text-right">
@@ -268,7 +268,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <span>정상 배정 기기 우선 가동</span>
             <button
               onClick={() => onNavigateTab('devices')}
-              className="text-purple-600 hover:text-purple-800 font-bold flex items-center gap-0.5"
+              className="text-purple-500 hover:text-purple-700 font-bold flex items-center gap-0.5"
             >
               <span>기기 필터</span>
               <ChevronRight className="w-3 h-3" />
@@ -289,7 +289,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
             <button
               onClick={() => onNavigateTab('devices')}
-              className="text-xs text-purple-600 hover:text-purple-800 font-bold flex items-center gap-0.5"
+              className="text-xs text-purple-500 hover:text-purple-700 font-bold flex items-center gap-0.5"
             >
               <span>전체보기</span>
               <ChevronRight className="w-3.5 h-3.5" />
@@ -378,10 +378,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
         >
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">학급별 배정 현황</span>
-            <ArrowUpRight className="w-4 h-4 text-slate-300 group-hover:text-purple-600 transition-colors" />
+            <ArrowUpRight className="w-4 h-4 text-slate-300 group-hover:text-purple-500 transition-colors" />
           </div>
           <div className="text-2xl font-black text-slate-900 font-mono">33개 학급</div>
-          <div className="text-xs text-purple-600 font-bold mt-1 flex items-center">
+          <div className="text-xs text-purple-500 font-bold mt-1 flex items-center">
             <span>바로가기</span>
             <ChevronRight className="w-3 h-3 ml-0.5" />
           </div>
@@ -393,10 +393,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
         >
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">담당 교사 보고</span>
-            <ArrowUpRight className="w-4 h-4 text-slate-300 group-hover:text-purple-600 transition-colors" />
+            <ArrowUpRight className="w-4 h-4 text-slate-300 group-hover:text-purple-500 transition-colors" />
           </div>
           <div className="text-2xl font-black text-slate-900 font-mono">원클릭 보고서</div>
-          <div className="text-xs text-purple-600 font-bold mt-1 flex items-center">
+          <div className="text-xs text-purple-500 font-bold mt-1 flex items-center">
             <span>출력 및 복사</span>
             <ChevronRight className="w-3 h-3 ml-0.5" />
           </div>
@@ -408,10 +408,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
         >
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">신규 기기 등록</span>
-            <ArrowUpRight className="w-4 h-4 text-slate-300 group-hover:text-purple-600 transition-colors" />
+            <ArrowUpRight className="w-4 h-4 text-slate-300 group-hover:text-purple-500 transition-colors" />
           </div>
           <div className="text-2xl font-black text-slate-900 font-mono">+ 개별/일괄</div>
-          <div className="text-xs text-purple-600 font-bold mt-1 flex items-center">
+          <div className="text-xs text-purple-500 font-bold mt-1 flex items-center">
             <span>등록 폼 열기</span>
             <ChevronRight className="w-3 h-3 ml-0.5" />
           </div>
@@ -423,10 +423,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
         >
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">소모품 관리</span>
-            <ArrowUpRight className="w-4 h-4 text-slate-300 group-hover:text-purple-600 transition-colors" />
+            <ArrowUpRight className="w-4 h-4 text-slate-300 group-hover:text-purple-500 transition-colors" />
           </div>
           <div className="text-2xl font-black text-slate-900 font-mono">{stats.mouse.total + stats.earphone.total}개</div>
-          <div className="text-xs text-purple-600 font-bold mt-1 flex items-center">
+          <div className="text-xs text-purple-500 font-bold mt-1 flex items-center">
             <span>재고 조정</span>
             <ChevronRight className="w-3 h-3 ml-0.5" />
           </div>
