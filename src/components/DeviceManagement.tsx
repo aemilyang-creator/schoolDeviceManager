@@ -35,25 +35,51 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
 }) => {
   const { devices, deleteDevice, deleteMultipleDevices, batchUpdateStatus } = useDevices();
 
+  // Helper to rank locations (1학년 1반 < 1학년 2반 < ... < 6학년 < 스마트실)
+  const getLocationRank = (loc: string) => {
+    const match = loc.match(/(\d+)학년\s*(\d+)반/);
+    if (match) {
+      return { grade: parseInt(match[1], 10), classNum: parseInt(match[2], 10), isSmart: 0, raw: loc };
+    }
+    if (loc.includes('스마트')) {
+      return { grade: 999, classNum: 999, isSmart: 1, raw: '스마트실' };
+    }
+    return { grade: 1000, classNum: 1000, isSmart: 2, raw: loc };
+  };
+
   // Filter & Search State
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedType, setSelectedType] = useState<'all' | DeviceType>('all');
   const [selectedStatus, setSelectedStatus] = useState<'all' | DeviceStatus>('all');
   const [selectedMfr, setSelectedMfr] = useState<'all' | string>('all');
   const [selectedLocation, setSelectedLocation] = useState<'all' | string>('all');
-  const [sortBy, setSortBy] = useState<'managementNumber' | 'updatedAt' | 'location' | 'status'>('managementNumber');
+  const [sortBy, setSortBy] = useState<'location' | 'classDeviceNumber' | 'managementNumber' | 'updatedAt' | 'status'>('location');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   // Multi-selection state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const itemsPerPage = 25;
+  const [itemsPerPage, setItemsPerPage] = useState<number>(50);
 
-  // Extract all unique locations and manufacturers
+  // Extract all unique locations sorted by grade & class order (1학년 1반 -> 6학년 -> 스마트실)
   const allLocations = useMemo(() => {
     const set = new Set<string>();
-    devices.forEach((d) => set.add(d.location));
-    return Array.from(set).sort();
+    devices.forEach((d) => {
+      let loc = d.location;
+      if (loc.includes('컴퓨터') || loc.includes('AI 스마트') || loc.includes('보관실')) {
+        loc = '스마트실';
+      }
+      set.add(loc);
+    });
+
+    return Array.from(set).sort((a, b) => {
+      const rankA = getLocationRank(a);
+      const rankB = getLocationRank(b);
+      if (rankA.grade !== rankB.grade) return rankA.grade - rankB.grade;
+      if (rankA.classNum !== rankB.classNum) return rankA.classNum - rankB.classNum;
+      if (rankA.isSmart !== rankB.isSmart) return rankA.isSmart - rankB.isSmart;
+      return a.localeCompare(b);
+    });
   }, [devices]);
 
   const allManufacturers = useMemo(() => {
@@ -91,7 +117,44 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
       return matchSearch && matchType && matchStatus && matchMfr && matchLoc;
     }).sort((a, b) => {
       let comparison = 0;
-      if (sortBy === 'managementNumber') {
+
+      if (sortBy === 'location') {
+        // 1. Grade / Class rank (1학년 1반 < ... < 6학년 < 스마트실)
+        const rankA = getLocationRank(a.location);
+        const rankB = getLocationRank(b.location);
+        if (rankA.grade !== rankB.grade) {
+          comparison = rankA.grade - rankB.grade;
+        } else if (rankA.classNum !== rankB.classNum) {
+          comparison = rankA.classNum - rankB.classNum;
+        } else if (rankA.isSmart !== rankB.isSmart) {
+          comparison = rankA.isSmart - rankB.isSmart;
+        } else {
+          // 2. Class device number inside the same room (1번, 2번 ... 20번)
+          const numA = a.classDeviceNumber !== undefined ? a.classDeviceNumber : 999999;
+          const numB = b.classDeviceNumber !== undefined ? b.classDeviceNumber : 999999;
+          if (numA !== numB) {
+            comparison = numA - numB;
+          } else {
+            comparison = a.managementNumber.localeCompare(b.managementNumber);
+          }
+        }
+      } else if (sortBy === 'classDeviceNumber') {
+        const numA = a.classDeviceNumber !== undefined ? a.classDeviceNumber : 999999;
+        const numB = b.classDeviceNumber !== undefined ? b.classDeviceNumber : 999999;
+        if (numA !== numB) {
+          comparison = numA - numB;
+        } else {
+          const rankA = getLocationRank(a.location);
+          const rankB = getLocationRank(b.location);
+          if (rankA.grade !== rankB.grade) {
+            comparison = rankA.grade - rankB.grade;
+          } else if (rankA.classNum !== rankB.classNum) {
+            comparison = rankA.classNum - rankB.classNum;
+          } else {
+            comparison = rankA.isSmart - rankB.isSmart;
+          }
+        }
+      } else if (sortBy === 'managementNumber') {
         const numA = a.classDeviceNumber !== undefined ? a.classDeviceNumber : parseInt((a.managementNumber.match(/\d+/) || ['999999'])[0], 10);
         const numB = b.classDeviceNumber !== undefined ? b.classDeviceNumber : parseInt((b.managementNumber.match(/\d+/) || ['999999'])[0], 10);
         if (numA !== numB) {
@@ -99,8 +162,6 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
         } else {
           comparison = a.managementNumber.localeCompare(b.managementNumber);
         }
-      } else if (sortBy === 'location') {
-        comparison = a.location.localeCompare(b.location);
       } else if (sortBy === 'status') {
         comparison = a.status.localeCompare(b.status);
       } else if (sortBy === 'updatedAt') {
@@ -113,9 +174,10 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
   // Pagination
   const totalPages = Math.ceil(filteredDevices.length / itemsPerPage) || 1;
   const paginatedDevices = useMemo(() => {
+    if (itemsPerPage >= 99999) return filteredDevices;
     const start = (currentPage - 1) * itemsPerPage;
     return filteredDevices.slice(start, start + itemsPerPage);
-  }, [filteredDevices, currentPage]);
+  }, [filteredDevices, currentPage, itemsPerPage]);
 
   // Select all on current page
   const isAllCurrentSelected = paginatedDevices.length > 0 && paginatedDevices.every((d) => selectedIds.includes(d.id));
@@ -159,19 +221,16 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
 
   // Export CSV
   const handleExportCSV = () => {
-    const headers = ['관리번호', '기기종류', '기기명', '제조사', '모델명', '보관장소', '상태', '고장내용', '수리내용', '등록일', '수정일', '비고'];
+    const headers = ['보관장소', '반번호', '관리번호', '기기종류', '기기명', '상태', '고장내용', '수리내용', '비고'];
     const rows = filteredDevices.map((d) => [
+      d.location,
+      d.classDeviceNumber !== undefined ? `${d.classDeviceNumber}번` : '',
       d.managementNumber,
       getDeviceTypeLabel(d.deviceType),
       d.deviceName,
-      d.manufacturer || '',
-      d.modelName || '',
-      d.location,
       d.status === 'normal' ? '정상' : d.status === 'repair' ? '수리중' : '고장',
       d.issueDescription ? `"${d.issueDescription.replace(/"/g, '""')}"` : '',
       d.repairDescription ? `"${d.repairDescription.replace(/"/g, '""')}"` : '',
-      d.createdAt || '',
-      d.updatedAt || '',
       d.note ? `"${d.note.replace(/"/g, '""')}"` : '',
     ]);
 
@@ -186,7 +245,7 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
     document.body.removeChild(link);
   };
 
-  const handleSort = (field: 'managementNumber' | 'updatedAt' | 'location' | 'status') => {
+  const handleSort = (field: 'location' | 'classDeviceNumber' | 'managementNumber' | 'updatedAt' | 'status') => {
     if (sortBy === field) {
       setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
@@ -412,44 +471,52 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
                   </button>
                 </th>
                 <th 
-                  className="py-4 px-4 cursor-pointer hover:bg-slate-100/70 transition-colors"
+                  className={`py-4 px-4 cursor-pointer transition-colors ${
+                    sortBy === 'location' ? 'bg-purple-100/60 text-purple-950 font-black' : 'hover:bg-slate-100/70'
+                  }`}
+                  onClick={() => handleSort('location')}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>보관 장소 (학급순)</span>
+                    <ArrowUpDown className={`w-3.5 h-3.5 ${sortBy === 'location' ? 'text-purple-900' : 'text-slate-400'}`} />
+                  </div>
+                </th>
+                <th 
+                  className={`py-4 px-4 cursor-pointer transition-colors ${
+                    sortBy === 'classDeviceNumber' ? 'bg-purple-100/60 text-purple-950 font-black' : 'hover:bg-slate-100/70'
+                  }`}
+                  onClick={() => handleSort('classDeviceNumber')}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>반 번호</span>
+                    <ArrowUpDown className={`w-3.5 h-3.5 ${sortBy === 'classDeviceNumber' ? 'text-purple-900' : 'text-slate-400'}`} />
+                  </div>
+                </th>
+                <th 
+                  className={`py-4 px-4 cursor-pointer transition-colors ${
+                    sortBy === 'managementNumber' ? 'bg-purple-100/60 text-purple-950 font-black' : 'hover:bg-slate-100/70'
+                  }`}
                   onClick={() => handleSort('managementNumber')}
                 >
                   <div className="flex items-center gap-1.5">
                     <span>관리번호</span>
-                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                    <ArrowUpDown className={`w-3.5 h-3.5 ${sortBy === 'managementNumber' ? 'text-purple-900' : 'text-slate-400'}`} />
                   </div>
                 </th>
                 <th className="py-4 px-4">기기종류</th>
-                <th className="py-4 px-4">기기명 / 제조사</th>
+                <th className="py-4 px-4">기기명</th>
                 <th 
-                  className="py-4 px-4 cursor-pointer hover:bg-slate-100/70 transition-colors"
-                  onClick={() => handleSort('location')}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span>보관 장소</span>
-                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
-                  </div>
-                </th>
-                <th 
-                  className="py-4 px-4 cursor-pointer hover:bg-slate-100/70 transition-colors"
+                  className={`py-4 px-4 cursor-pointer transition-colors ${
+                    sortBy === 'status' ? 'bg-purple-100/60 text-purple-950 font-black' : 'hover:bg-slate-100/70'
+                  }`}
                   onClick={() => handleSort('status')}
                 >
                   <div className="flex items-center gap-1.5">
                     <span>상태</span>
-                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+                    <ArrowUpDown className={`w-3.5 h-3.5 ${sortBy === 'status' ? 'text-purple-900' : 'text-slate-400'}`} />
                   </div>
                 </th>
                 <th className="py-4 px-5">고장/수리 내용</th>
-                <th 
-                  className="py-4 px-4 cursor-pointer hover:bg-slate-100/70 transition-colors"
-                  onClick={() => handleSort('updatedAt')}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span>최종 수정일</span>
-                    <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
-                  </div>
-                </th>
                 <th className="py-4 px-4 text-right">작업</th>
               </tr>
             </thead>
@@ -479,40 +546,46 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
                       </button>
                     </td>
 
-                    <td className="py-4 px-4 font-mono font-black text-purple-950 text-sm">
-                      <div className="flex items-center space-x-2">
-                        {device.classDeviceNumber !== undefined && (
-                          <span className="px-2 py-0.5 rounded-lg bg-purple-100 text-purple-950 font-bold text-xs">
-                            {device.classDeviceNumber}번
-                          </span>
-                        )}
-                        {device.managementNumber ? (
-                          <span>{device.managementNumber}</span>
-                        ) : (
-                          <span className="text-slate-400 font-normal italic text-xs">미입력</span>
-                        )}
-                      </div>
+                    {/* 1. Location */}
+                    <td className="py-4 px-4 font-bold text-slate-900">
+                      <span className="px-2.5 py-1 rounded-xl bg-purple-50 text-purple-950 font-black border border-purple-100 text-xs">
+                        {device.location}
+                      </span>
                     </td>
 
+                    {/* 2. Class Device Number */}
+                    <td className="py-4 px-4">
+                      {device.classDeviceNumber !== undefined ? (
+                        <span className="px-2.5 py-1 rounded-lg bg-purple-900 text-white font-black text-xs">
+                          {device.classDeviceNumber}번
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-medium">-</span>
+                      )}
+                    </td>
+
+                    {/* 3. Management Number */}
+                    <td className="py-4 px-4 font-mono font-bold text-purple-950 text-xs">
+                      {device.managementNumber ? (
+                        <span>{device.managementNumber}</span>
+                      ) : (
+                        <span className="text-slate-400 font-normal italic">미입력</span>
+                      )}
+                    </td>
+
+                    {/* 4. Device Type */}
                     <td className="py-4 px-4">
                       <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 font-bold text-[11px]">
                         {getDeviceTypeLabel(device.deviceType)}
                       </span>
                     </td>
 
+                    {/* 5. Device Name */}
                     <td className="py-4 px-4 text-slate-800">
                       <div className="font-black text-slate-900">{device.deviceName}</div>
-                      <div className="text-[11px] text-slate-400 font-medium">
-                        {device.manufacturer} {device.modelName ? `· ${device.modelName}` : ''}
-                      </div>
                     </td>
 
-                    <td className="py-4 px-4 font-bold text-slate-800">
-                      <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 font-bold">
-                        {device.location}
-                      </span>
-                    </td>
-
+                    {/* 6. Status Badge */}
                     <td className="py-4 px-4">
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${badge.bg}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
@@ -520,6 +593,7 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
                       </span>
                     </td>
 
+                    {/* 7. Issues / Notes */}
                     <td className="py-4 px-5 text-slate-600 max-w-xs truncate font-medium">
                       {device.issueDescription ? (
                         <span className="text-rose-700 font-bold truncate">{device.issueDescription}</span>
@@ -532,10 +606,7 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
                       )}
                     </td>
 
-                    <td className="py-4 px-4 text-slate-500 font-mono font-medium">
-                      {formatDate(device.updatedAt)}
-                    </td>
-
+                    {/* 8. Actions */}
                     <td className="py-4 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end space-x-2">
                         <button
@@ -546,7 +617,7 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
                         </button>
                         <button
                           onClick={() => {
-                            if (window.confirm(`${device.managementNumber} 기기를 삭제하시겠습니까?`)) {
+                            if (window.confirm(`${device.managementNumber || device.deviceName} 기기를 삭제하시겠습니까?`)) {
                               deleteDevice(device.id);
                             }
                           }}
@@ -576,29 +647,49 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
         {/* Pagination Bar */}
         {filteredDevices.length > 0 && (
           <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600 font-medium">
-            <div>
-              전체 {filteredDevices.length}개 중 {Math.min(filteredDevices.length, (currentPage - 1) * itemsPerPage + 1)} - {Math.min(filteredDevices.length, currentPage * itemsPerPage)} 표시
+            <div className="flex items-center gap-3">
+              <span>
+                전체 <strong className="text-purple-950 font-black">{filteredDevices.length}</strong>개 중 {Math.min(filteredDevices.length, (currentPage - 1) * itemsPerPage + 1)} - {Math.min(filteredDevices.length, itemsPerPage >= 99999 ? filteredDevices.length : currentPage * itemsPerPage)} 표시
+              </span>
+              <div className="flex items-center gap-1.5 ml-2">
+                <span className="text-slate-400 font-bold">페이지당:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:ring-2 focus:ring-purple-900 focus:outline-none"
+                >
+                  <option value={25}>25개씩</option>
+                  <option value={50}>50개씩</option>
+                  <option value={100}>100개씩</option>
+                  <option value={999999}>전체보기</option>
+                </select>
+              </div>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <button
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 font-bold"
-              >
-                이전
-              </button>
-              <span className="px-3 font-mono font-black text-slate-900">
-                {currentPage} / {totalPages}
-              </span>
-              <button
-                disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 font-bold"
-              >
-                다음
-              </button>
-            </div>
+            {itemsPerPage < 99999 && (
+              <div className="flex items-center space-x-2">
+                <button
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 font-bold"
+                >
+                  이전
+                </button>
+                <span className="px-3 font-mono font-black text-slate-900">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 font-bold"
+                >
+                  다음
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -71,26 +71,76 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const saved = localStorage.getItem(STORAGE_KEYS.DEVICES);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed.map((d: any) => {
-            let classNum = d.classDeviceNumber;
-            let mgmt = d.managementNumber || '';
-            // If previous data used 'X번' as managementNumber, migrate to classDeviceNumber and clear managementNumber
-            if (classNum === undefined) {
-              const match = typeof mgmt === 'string' ? mgmt.match(/^(\d+)번$/) : null;
-              if (match) {
-                classNum = parseInt(match[1], 10);
-                mgmt = ''; // Reset to blank for asset number input
-              }
-            } else if (typeof mgmt === 'string' && mgmt.match(/^(\d+)번$/)) {
-              mgmt = '';
-            }
-            return {
-              ...d,
-              classDeviceNumber: classNum,
-              managementNumber: mgmt,
-            };
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Filter out 1학년 and 2학년 devices per user's requirement (3학년 1반부터 시작)
+          const validDevices = parsed.filter((d: any) => {
+            if (!d.location) return true;
+            if (d.location.startsWith('1학년') || d.location.startsWith('2학년')) return false;
+            if (d.grade === 1 || d.grade === 2) return false;
+            return true;
           });
+
+          if (validDevices.length > 0) {
+            // Track device count per location to assign classDeviceNumber if missing
+            const locationCounts: Record<string, number> = {};
+
+            return validDevices.map((d: any) => {
+              let classNum = d.classDeviceNumber;
+              let mgmt = d.managementNumber || '';
+
+              // Cleanly migrate legacy special room locations to '스마트실'
+              let location = d.location || '스마트실';
+              if (
+                location.includes('컴퓨터') || 
+                location.includes('AI 스마트') || 
+                location.includes('보관실') || 
+                location === '특별실'
+              ) {
+                location = '스마트실';
+              }
+
+              // Auto extract grade & classNum if not set
+              let grade = d.grade;
+              let cNum = d.classNum;
+              const locMatch = location.match(/(\d+)학년\s*(\d+)반/);
+              if (locMatch) {
+                if (!grade) grade = parseInt(locMatch[1], 10);
+                if (!cNum) cNum = parseInt(locMatch[2], 10);
+              }
+
+              locationCounts[location] = (locationCounts[location] || 0) + 1;
+
+              // If classDeviceNumber is undefined/null, infer from note, id, mgmt, or count
+              if (classNum === undefined || classNum === null) {
+                const noteMatch = typeof d.note === 'string' ? d.note.match(/(\d+)번/) : null;
+                const idMatch = typeof d.id === 'string' ? d.id.match(/-(\d+)$/) : null;
+                const mgmtMatch = typeof mgmt === 'string' ? mgmt.match(/^(\d+)번$/) || mgmt.match(/(\d+)번/) : null;
+
+                if (noteMatch) {
+                  classNum = parseInt(noteMatch[1], 10);
+                } else if (idMatch) {
+                  classNum = parseInt(idMatch[1], 10);
+                } else if (mgmtMatch) {
+                  classNum = parseInt(mgmtMatch[1], 10);
+                } else {
+                  classNum = locationCounts[location];
+                }
+              }
+
+              if (typeof mgmt === 'string' && mgmt.match(/^(\d+)번$/)) {
+                mgmt = '';
+              }
+
+              return {
+                ...d,
+                location,
+                grade,
+                classNum: cNum,
+                classDeviceNumber: classNum,
+                managementNumber: mgmt,
+              };
+            });
+          }
         }
       }
     } catch (e) {
@@ -104,15 +154,17 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const saved = localStorage.getItem(STORAGE_KEYS.CONSUMABLES);
       if (saved) {
         const parsed: ConsumableInventory[] = JSON.parse(saved);
-        // Cleanly migrate legacy '제1컴퓨터실', '제2컴퓨터실', 'AI 스마트교실' to '스마트실' if needed
-        let hasSmart = parsed.some(c => c.location === '스마트실');
-        if (!hasSmart) {
-          const legacySpecial = parsed.find(c => c.location === '제1컴퓨터실' || c.location.includes('컴퓨터') || c.location.includes('스마트'));
-          if (legacySpecial) {
-            legacySpecial.location = '스마트실';
+        const filtered = parsed.filter(c => !c.location.startsWith('1학년') && !c.location.startsWith('2학년'));
+        if (filtered.length > 0) {
+          let hasSmart = filtered.some(c => c.location === '스마트실');
+          if (!hasSmart) {
+            const legacySpecial = filtered.find(c => c.location === '제1컴퓨터실' || c.location.includes('컴퓨터') || c.location.includes('스마트'));
+            if (legacySpecial) {
+              legacySpecial.location = '스마트실';
+            }
           }
+          return filtered;
         }
-        return parsed;
       }
     } catch (e) {
       console.error('Failed to load consumables from storage', e);
@@ -128,7 +180,29 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (parsed.schoolName === '제주이도초등학교') {
           parsed.schoolName = '제주초등학교';
         }
-        return { ...INITIAL_SYSTEM_CONFIG, ...parsed, schoolName: parsed.schoolName || '제주초등학교' };
+        let customGrades = parsed.customGrades;
+        if (Array.isArray(customGrades)) {
+          customGrades = customGrades.filter((g: number) => g >= 3);
+          if (customGrades.length === 0) customGrades = [3, 4, 5, 6];
+        } else {
+          customGrades = [3, 4, 5, 6];
+        }
+
+        const customClasses = { ...(parsed.customClasses || {}) };
+        delete customClasses[1];
+        delete customClasses[2];
+        if (!customClasses[3]) customClasses[3] = [1, 2, 3, 4, 5];
+        if (!customClasses[4]) customClasses[4] = [1, 2, 3, 4, 5, 6];
+        if (!customClasses[5]) customClasses[5] = [1, 2, 3, 4, 5, 6];
+        if (!customClasses[6]) customClasses[6] = [1, 2, 3, 4, 5, 6];
+
+        return { 
+          ...INITIAL_SYSTEM_CONFIG, 
+          ...parsed, 
+          customGrades,
+          customClasses,
+          schoolName: parsed.schoolName || '제주초등학교' 
+        };
       }
     } catch (e) {
       console.error('Failed to load config from storage', e);
@@ -233,8 +307,29 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const addDevice = (newDeviceData: Omit<Device, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString().split('T')[0];
+    const loc = newDeviceData.location || '스마트실';
+    const locMatch = loc.match(/(\d+)학년\s*(\d+)반/);
+    let grade = newDeviceData.grade;
+    let classNum = newDeviceData.classNum;
+    if (locMatch) {
+      if (!grade) grade = parseInt(locMatch[1], 10);
+      if (!classNum) classNum = parseInt(locMatch[2], 10);
+    }
+
+    // Determine classDeviceNumber if not specified
+    let cDevNum = newDeviceData.classDeviceNumber;
+    if (cDevNum === undefined || cDevNum === null) {
+      const existingInLoc = devices.filter((d) => d.location === loc && d.classDeviceNumber !== undefined);
+      const maxNum = existingInLoc.length > 0 ? Math.max(...existingInLoc.map((d) => d.classDeviceNumber || 0)) : 0;
+      cDevNum = maxNum + 1;
+    }
+
     const newDevice: Device = {
       ...newDeviceData,
+      location: loc,
+      grade,
+      classNum,
+      classDeviceNumber: cDevNum,
       id: `device-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       createdAt: now,
       updatedAt: now,
@@ -249,27 +344,82 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         },
       ],
     };
+
     setDevices((prev) => [newDevice, ...prev]);
+
+    // If this device belongs to a grade & class that isn't registered yet, auto-register in systemConfig & consumables
+    if (grade && classNum) {
+      setSystemConfig((prev) => {
+        const currentGrades = prev.customGrades ? [...prev.customGrades] : [3, 4, 5, 6];
+        const nextGrades = currentGrades.includes(grade!) ? currentGrades : [...currentGrades, grade!].sort((a, b) => a - b);
+        const currentClasses: Record<number, number[]> = { ...(prev.customClasses || {}) };
+        const gradeClasses = currentClasses[grade!] ? [...currentClasses[grade!]] : [];
+        if (!gradeClasses.includes(classNum!)) {
+          gradeClasses.push(classNum!);
+          gradeClasses.sort((a, b) => a - b);
+        }
+        currentClasses[grade!] = gradeClasses;
+        return {
+          ...prev,
+          customGrades: nextGrades,
+          customClasses: currentClasses,
+        };
+      });
+
+      setConsumables((prev) => {
+        if (prev.some((c) => c.location === loc)) return prev;
+        return [
+          ...prev,
+          {
+            id: `cons-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+            location: loc,
+            deviceType: 'mouse',
+            mouseWiredCount: 0,
+            mouseWirelessCount: 20,
+            earphoneCount: 15,
+            mouseSpareCount: 0,
+            earphoneSpareCount: 0,
+            requestMemo: '',
+            updatedAt: now,
+          },
+        ];
+      });
+    }
   };
 
   const batchAddDevices = (newDevicesData: Array<Omit<Device, 'id' | 'createdAt' | 'updatedAt'>>) => {
     const now = new Date().toISOString().split('T')[0];
-    const generated: Device[] = newDevicesData.map((data, idx) => ({
-      ...data,
-      id: `device-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 6)}`,
-      createdAt: now,
-      updatedAt: now,
-      history: [
-        {
-          id: `hist-${Date.now()}-${idx}`,
-          date: now,
-          previousStatus: data.status,
-          newStatus: data.status,
-          description: '일괄 기기 등록 완료',
-          userName: systemConfig.digitalTutorName,
-        },
-      ],
-    }));
+    const generated: Device[] = newDevicesData.map((data, idx) => {
+      const loc = data.location || '스마트실';
+      const locMatch = loc.match(/(\d+)학년\s*(\d+)반/);
+      let grade = data.grade;
+      let classNum = data.classNum;
+      if (locMatch) {
+        if (!grade) grade = parseInt(locMatch[1], 10);
+        if (!classNum) classNum = parseInt(locMatch[2], 10);
+      }
+
+      return {
+        ...data,
+        location: loc,
+        grade,
+        classNum,
+        id: `device-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 6)}`,
+        createdAt: now,
+        updatedAt: now,
+        history: [
+          {
+            id: `hist-${Date.now()}-${idx}`,
+            date: now,
+            previousStatus: data.status,
+            newStatus: data.status,
+            description: '일괄 기기 등록 완료',
+            userName: systemConfig.digitalTutorName,
+          },
+        ],
+      };
+    });
+
     setDevices((prev) => [...generated, ...prev]);
   };
 
@@ -380,15 +530,13 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setSystemConfig((prev) => {
       const currentGrades = prev.customGrades && prev.customGrades.length > 0
         ? [...prev.customGrades]
-        : [1, 2, 3, 4, 5, 6];
+        : [3, 4, 5, 6];
       const nextGrades = currentGrades.includes(grade)
         ? currentGrades
         : [...currentGrades, grade].sort((a, b) => a - b);
 
       const currentClasses: Record<number, number[]> = {
         ...(prev.customClasses || {
-          1: [1, 2, 3, 4, 5],
-          2: [1, 2, 3, 4, 5],
           3: [1, 2, 3, 4, 5],
           4: [1, 2, 3, 4, 5, 6],
           5: [1, 2, 3, 4, 5, 6],
@@ -468,8 +616,6 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setSystemConfig((prev) => {
       const currentClasses: Record<number, number[]> = {
         ...(prev.customClasses || {
-          1: [1, 2, 3, 4, 5],
-          2: [1, 2, 3, 4, 5],
           3: [1, 2, 3, 4, 5],
           4: [1, 2, 3, 4, 5, 6],
           5: [1, 2, 3, 4, 5, 6],
@@ -494,15 +640,13 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setSystemConfig((prev) => {
       const currentGrades = prev.customGrades && prev.customGrades.length > 0
         ? [...prev.customGrades]
-        : [1, 2, 3, 4, 5, 6];
+        : [3, 4, 5, 6];
       const nextGrades = currentGrades.includes(grade)
         ? currentGrades
         : [...currentGrades, grade].sort((a, b) => a - b);
 
       const currentClasses: Record<number, number[]> = {
         ...(prev.customClasses || {
-          1: [1, 2, 3, 4, 5],
-          2: [1, 2, 3, 4, 5],
           3: [1, 2, 3, 4, 5],
           4: [1, 2, 3, 4, 5, 6],
           5: [1, 2, 3, 4, 5, 6],
@@ -575,12 +719,10 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setSystemConfig((prev) => {
       const currentGrades = prev.customGrades && prev.customGrades.length > 0
         ? [...prev.customGrades]
-        : [1, 2, 3, 4, 5, 6];
+        : [3, 4, 5, 6];
       const nextGrades = currentGrades.filter((g) => g !== grade);
       const currentClasses: Record<number, number[]> = {
         ...(prev.customClasses || {
-          1: [1, 2, 3, 4, 5],
-          2: [1, 2, 3, 4, 5],
           3: [1, 2, 3, 4, 5],
           4: [1, 2, 3, 4, 5, 6],
           5: [1, 2, 3, 4, 5, 6],

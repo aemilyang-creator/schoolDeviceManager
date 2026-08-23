@@ -133,7 +133,6 @@ export const DeviceRegisterModal: React.FC<DeviceRegisterModalProps> = ({
 
   // Location suggestions
   const commonLocations = [
-    '1학년 1반', '1학년 2반', '2학년 1반', '2학년 2반',
     '3학년 1반', '3학년 2반', '4학년 1반', '4학년 2반',
     '5학년 1반', '5학년 2반', '6학년 1반', '6학년 2반',
     '스마트실'
@@ -325,11 +324,11 @@ export const DeviceRegisterModal: React.FC<DeviceRegisterModalProps> = ({
 
                 <div>
                   <label className="block text-slate-900 font-bold mb-1">
-                    모델명 / 기기 메모 <span className="text-slate-400 font-normal">(선택)</span>
+                    기기 메모 <span className="text-slate-400 font-normal">(선택)</span>
                   </label>
                   <input
                     type="text"
-                    placeholder="예: 갤럭시 2 360, 2024년 구입 (자유 메모 가능)"
+                    placeholder="예: 2024년 구입 (자유 메모 가능)"
                     value={modelName}
                     onChange={(e) => setModelName(e.target.value)}
                     className="w-full px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-900 focus:outline-none font-medium"
@@ -341,13 +340,13 @@ export const DeviceRegisterModal: React.FC<DeviceRegisterModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-900 font-bold mb-1">
-                    보관 장소 (학급/특별실) <span className="text-rose-500">*</span>
+                    보관 장소 (학급/스마트실) <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
                     required
                     list="location-list"
-                    placeholder="예: 3학년 1반, 제1컴퓨터실"
+                    placeholder="예: 3학년 1반, 스마트실"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
                     className="w-full px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-900 focus:outline-none font-bold"
@@ -508,12 +507,13 @@ export const DeviceRegisterModal: React.FC<DeviceRegisterModalProps> = ({
 
                 <div>
                   <label className="block text-slate-900 font-bold mb-1">
-                    모델명
+                    기기 메모 <span className="text-slate-400 font-normal">(선택)</span>
                   </label>
                   <input
                     type="text"
                     value={modelName}
                     onChange={(e) => setModelName(e.target.value)}
+                    placeholder="예: 2024년 구입 등"
                     className="w-full px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-900 focus:outline-none font-medium"
                   />
                 </div>

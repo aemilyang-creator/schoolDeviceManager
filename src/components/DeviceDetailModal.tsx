@@ -322,13 +322,13 @@ export const DeviceDetailModal: React.FC<DeviceDetailModalProps> = ({
 
             <div>
               <label className="block text-slate-900 font-bold mb-1">
-                모델명 / 기기 메모 <span className="text-slate-400 font-normal">(선택)</span>
+                기기 메모 <span className="text-slate-400 font-normal">(선택)</span>
               </label>
               <input
                 type="text"
                 value={modelName}
                 onChange={(e) => setModelName(e.target.value)}
-                placeholder="예: 갤럭시 크롬북 2, 2024년 구입 등"
+                placeholder="예: 2024년 구입, 터치펜 포함 등"
                 className="w-full px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-900 focus:outline-none font-medium"
               />
             </div>

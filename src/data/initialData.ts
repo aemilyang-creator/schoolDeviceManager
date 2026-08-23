@@ -7,10 +7,8 @@ export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
   digitalTutorName: '김디지털 (디지털 튜터)',
   deviceTeacherName: '이정보 (디지털기기 담당 교사)',
   userRole: 'tutor',
-  customGrades: [1, 2, 3, 4, 5, 6],
+  customGrades: [3, 4, 5, 6],
   customClasses: {
-    1: [1, 2, 3, 4, 5],
-    2: [1, 2, 3, 4, 5],
     3: [1, 2, 3, 4, 5],
     4: [1, 2, 3, 4, 5, 6],
     5: [1, 2, 3, 4, 5, 6],
@@ -21,31 +19,31 @@ export const INITIAL_SYSTEM_CONFIG: SystemConfig = {
   ]
 };
 
-// Generates the initial standard dataset matching the PRD specification
+// Generates the initial standard dataset matching the school specification starting from Grade 3
 export function generateInitialDevices(): Device[] {
   const devices: Device[] = [];
   const now = new Date();
   const dateStr = now.toISOString().split('T')[0];
 
-  // Classes: Grade 1 to 6 (5-6 classes each) = 33 classrooms
+  // Classes: Grade 3 to 6 (3학년: 5개 반, 4~6학년: 6개 반) = 23 classrooms
   const classes: { grade: number; classNum: number; name: string }[] = [];
-  for (let g = 1; g <= 6; g++) {
-    const classCount = g <= 3 ? 5 : 6;
+  for (let g = 3; g <= 6; g++) {
+    const classCount = g === 3 ? 5 : 6;
     for (let c = 1; c <= classCount; c++) {
       classes.push({ grade: g, classNum: c, name: `${g}학년 ${c}반` });
     }
   }
 
-  // 1. Chromebooks (Total 730: 714 Normal, 1 Under Repair, 15 Broken)
-  // Manufacturers: Samsung (290), LG (210), Lenovo (140), ASUS (90)
+  // 1. Chromebooks (Total 530: 23 classes * 20 = 460 in classrooms + 70 in Smart room)
+  // Manufacturers: Samsung, LG, Lenovo, ASUS
   const chromebookMfrs = [
-    { name: '삼성전자', model: 'Galaxy Chromebook 2 360', count: 290 },
-    { name: 'LG', model: 'LG Chromebook 11T90N', count: 210 },
-    { name: '레노버', model: 'Lenovo 300e Yoga Chromebook Gen 4', count: 140 },
-    { name: 'ASUS', model: 'ASUS Chromebook Flip CR1 (CR1100)', count: 90 },
+    { name: '삼성전자', model: 'Galaxy Chromebook 2 360', count: 210 },
+    { name: 'LG', model: 'LG Chromebook 11T90N', count: 150 },
+    { name: '레노버', model: 'Lenovo 300e Yoga Chromebook Gen 4', count: 100 },
+    { name: 'ASUS', model: 'ASUS Chromebook Flip CR1 (CR1100)', count: 70 },
   ];
 
-  // Prepare a flat pool of 730 manufacturer models
+  // Prepare a flat pool of manufacturer models
   const mfrPool: { name: string; model: string }[] = [];
   chromebookMfrs.forEach((mfrGroup) => {
     for (let i = 0; i < mfrGroup.count; i++) {
@@ -66,12 +64,8 @@ export function generateInitialDevices(): Device[] {
     '오디오 잭 부러짐으로 내부 박힘'
   ];
 
-  // Specific locations & management numbers for 15 broken devices and 1 repair device
+  // Specific locations & management numbers for broken devices and repair device
   const brokenTargetMap: Record<string, number> = {
-    '1학년 2반-5': 0,
-    '1학년 4반-12': 1,
-    '2학년 1반-8': 2,
-    '2학년 3반-19': 3,
     '3학년 1반-14': 4,
     '3학년 2반-3': 5,
     '3학년 5반-17': 6,
@@ -82,14 +76,15 @@ export function generateInitialDevices(): Device[] {
     '5학년 6반-16': 1,
     '6학년 2반-7': 2,
     '6학년 5반-15': 3,
-    '제1컴퓨터실-22': 4,
+    '스마트실-8': 4,
+    '스마트실-22': 5,
   };
 
   const repairTargetKey = '3학년 1반-7';
 
   let poolIdx = 0;
 
-  // 1. Generate 20 Chromebooks for each of the 33 classrooms (1번 ~ 20번) -> 660 Chromebooks
+  // 1. Generate 20 Chromebooks for each classroom (1번 ~ 20번)
   classes.forEach((targetClass) => {
     for (let num = 1; num <= 20; num++) {
       const mfrInfo = mfrPool[poolIdx % mfrPool.length];
@@ -115,7 +110,7 @@ export function generateInitialDevices(): Device[] {
       devices.push({
         id: `device-cb-${targetClass.grade}-${targetClass.classNum}-${num}`,
         deviceType: 'chromebook',
-        managementNumber: '', // 관리번호는 우선 빈칸으로 나중에 입력
+        managementNumber: '', // 관리번호는 비워두고 필요시 입력
         classDeviceNumber: num, // 반 번호 (1번 ~ 20번)
         deviceName: `${mfrInfo.name} 크롬북`,
         modelName: mfrInfo.model,
@@ -143,13 +138,9 @@ export function generateInitialDevices(): Device[] {
     }
   });
 
-  // 2. Generate remaining 70 Chromebooks for Special Rooms (Total 730)
+  // 2. Generate 70 Chromebooks for Smart Room (Total 530)
   const specialRoomDistributions = [
-    { room: '제1컴퓨터실', count: 30 },
-    { room: '제2컴퓨터실', count: 20 },
-    { room: 'AI 스마트교실', count: 10 },
-    { room: '디지털기기 보관실', count: 5 },
-    { room: '예비 보관실', count: 5 },
+    { room: '스마트실', count: 70 },
   ];
 
   specialRoomDistributions.forEach(({ room, count }) => {
@@ -173,8 +164,8 @@ export function generateInitialDevices(): Device[] {
       devices.push({
         id: `device-cb-${room}-${num}`,
         deviceType: 'chromebook',
-        managementNumber: '', // 관리번호는 우선 빈칸으로 나중에 입력
-        classDeviceNumber: num, // 번호 (1번 ~ ...)
+        managementNumber: '',
+        classDeviceNumber: num,
         deviceName: `${mfrInfo.name} 크롬북`,
         modelName: mfrInfo.model,
         manufacturer: mfrInfo.name,
@@ -184,14 +175,14 @@ export function generateInitialDevices(): Device[] {
         repairDescription: repairDesc,
         createdAt: '2024-03-02',
         updatedAt: status !== 'normal' ? dateStr : '2025-09-01',
-        note: `${room} 배정용 (${num}번)`,
+        note: `스마트실 공용 (${room} ${num}번)`,
         history: status !== 'normal' ? [
           {
             id: `hist-${room}-${num}`,
             date: dateStr,
             previousStatus: 'normal',
             newStatus: status,
-            description: issueDesc || '상태 변경 접수',
+            description: issueDesc || '상태 점검',
             userName: '김디지털 (튜터)'
           }
         ] : []
@@ -207,23 +198,14 @@ export function generateInitialConsumables(): ConsumableInventory[] {
   const list: ConsumableInventory[] = [];
   const now = new Date().toISOString().split('T')[0];
 
-  // Total Target: Mouse 705 (Wired 126, Wireless 579), Spare 0
-  // Total Target: Earphone 389, Spare 0
-
   const locations: string[] = [];
-  for (let g = 1; g <= 6; g++) {
-    const classCount = g <= 3 ? 5 : 6;
+  for (let g = 3; g <= 6; g++) {
+    const classCount = g === 3 ? 5 : 6;
     for (let c = 1; c <= classCount; c++) {
       locations.push(`${g}학년 ${c}반`);
     }
   }
   locations.push('스마트실', '소모품 보관실');
-
-  // Let's accurately distribute to match exactly 705 Mice (126 wired, 579 wireless) and 389 earphones
-  // 33 classrooms + 1 smart room + 1 storage = 35 locations
-  let remainingWired = 126;
-  let remainingWireless = 579;
-  let remainingEarphones = 389;
 
   locations.forEach((loc, idx) => {
     let wired = 0;
@@ -231,34 +213,17 @@ export function generateInitialConsumables(): ConsumableInventory[] {
     let earphone = 0;
 
     if (loc === '소모품 보관실') {
-      // Spare is 0 in PRD
-      wired = remainingWired;
-      wireless = remainingWireless;
-      earphone = remainingEarphones;
-      remainingWired = 0;
-      remainingWireless = 0;
-      remainingEarphones = 0;
+      wired = 20;
+      wireless = 30;
+      earphone = 25;
     } else if (loc === '스마트실') {
-      wired = 25; // Wired/wireless for smart room
+      wired = 25;
       wireless = 25;
       earphone = 30;
-      remainingWired -= wired;
-      remainingWireless -= wireless;
-      remainingEarphones -= earphone;
     } else {
-      // Classrooms
-      if (loc.startsWith('1학년') || loc.startsWith('2학년')) {
-        wired = 7;
-        wireless = 15;
-        earphone = 8;
-      } else {
-        wired = 0;
-        wireless = 20;
-        earphone = 11;
-      }
-      remainingWired = Math.max(0, remainingWired - wired);
-      remainingWireless = Math.max(0, remainingWireless - wireless);
-      remainingEarphones = Math.max(0, remainingEarphones - earphone);
+      wired = 0;
+      wireless = 20;
+      earphone = 15;
     }
 
     list.push({
@@ -274,21 +239,6 @@ export function generateInitialConsumables(): ConsumableInventory[] {
       updatedAt: now
     });
   });
-
-  // Adjust any remainder cleanly so the total sum is EXACTLY 705 mice (126 wired, 579 wireless) and 389 earphones
-  const currentTotalWired = list.reduce((acc, cur) => acc + cur.mouseWiredCount, 0);
-  const currentTotalWireless = list.reduce((acc, cur) => acc + cur.mouseWirelessCount, 0);
-  const currentTotalEarphone = list.reduce((acc, cur) => acc + cur.earphoneCount, 0);
-
-  const wiredDiff = 126 - currentTotalWired;
-  const wirelessDiff = 579 - currentTotalWireless;
-  const earphoneDiff = 389 - currentTotalEarphone;
-
-  if (list[0]) {
-    list[0].mouseWiredCount += wiredDiff;
-    list[0].mouseWirelessCount += wirelessDiff;
-    list[0].earphoneCount += earphoneDiff;
-  }
 
   return list;
 }

@@ -56,7 +56,7 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
     if (systemConfig.customGrades && systemConfig.customGrades.length > 0) {
       return [...systemConfig.customGrades].sort((a, b) => a - b);
     }
-    return [1, 2, 3, 4, 5, 6];
+    return [3, 4, 5, 6];
   }, [systemConfig.customGrades]);
 
   const classesMap = useMemo<Record<number, number[]>>(() => {
@@ -64,8 +64,6 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
       return systemConfig.customClasses;
     }
     return {
-      1: [1, 2, 3, 4, 5],
-      2: [1, 2, 3, 4, 5],
       3: [1, 2, 3, 4, 5],
       4: [1, 2, 3, 4, 5, 6],
       5: [1, 2, 3, 4, 5, 6],
@@ -969,10 +967,9 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
                         </span>
                       </td>
 
-                      {/* Device / Model */}
+                      {/* Device Name */}
                       <td className="py-3.5 px-4 text-slate-900 font-bold">
                         <div>{device.deviceName}</div>
-                        <div className="text-[11px] text-slate-400 font-normal">{device.manufacturer} · {device.modelName}</div>
                       </td>
 
                       {/* Status */}
@@ -1124,13 +1121,13 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                  모델명 / 기기 메모 <span className="text-slate-400 font-normal">(선택 사항 - 메모처럼 자유 작성)</span>
+                  기기 메모 <span className="text-slate-400 font-normal">(선택 사항 - 자유 메모 작성)</span>
                 </label>
                 <input
                   type="text"
                   value={newDeviceModel}
                   onChange={(e) => setNewDeviceModel(e.target.value)}
-                  placeholder="예: 갤럭시 2 360, 2024년 구입, 터치펜 포함 등 (비워두셔도 됩니다)"
+                  placeholder="예: 2024년 구입, 터치펜 포함 등 (비워두셔도 됩니다)"
                   className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-900 font-medium text-xs bg-white text-slate-900"
                 />
               </div>
