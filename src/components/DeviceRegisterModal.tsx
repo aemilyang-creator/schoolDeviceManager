@@ -18,6 +18,14 @@ interface DeviceRegisterModalProps {
   defaultLocation?: string;
 }
 
+const CHROMEBOOK_MFR_LIST = [
+  { id: '삼성전자', label: '삼성전자', defaultName: '삼성전자 크롬북' },
+  { id: 'LG', label: 'LG', defaultName: 'LG 크롬북' },
+  { id: '레노버', label: '레노버', defaultName: '레노버 크롬북' },
+  { id: 'ASUS', label: 'ASUS', defaultName: 'ASUS 크롬북' },
+  { id: '기타', label: '기타', defaultName: '기타 크롬북' },
+];
+
 export const DeviceRegisterModal: React.FC<DeviceRegisterModalProps> = ({
   isOpen,
   onClose,
@@ -31,7 +39,7 @@ export const DeviceRegisterModal: React.FC<DeviceRegisterModalProps> = ({
   const [deviceType, setDeviceType] = useState<DeviceType>('chromebook');
   const [classDeviceNumber, setClassDeviceNumber] = useState<string>('');
   const [managementNumber, setManagementNumber] = useState<string>('');
-  const [deviceName, setDeviceName] = useState<string>('삼성 갤럭시 크롬북');
+  const [deviceName, setDeviceName] = useState<string>('삼성전자 크롬북');
   const [manufacturer, setManufacturer] = useState<string>('삼성전자');
   const [modelName, setModelName] = useState<string>('');
   const [mouseType, setMouseType] = useState<MouseType>('wireless');
@@ -45,6 +53,11 @@ export const DeviceRegisterModal: React.FC<DeviceRegisterModalProps> = ({
   const [batchPrefix, setBatchPrefix] = useState<string>('CB-2026-');
   const [batchStartNum, setBatchStartNum] = useState<number>(1);
   const [batchCount, setBatchCount] = useState<number>(20);
+
+  const handleSelectChromebookMfr = (mfrId: string, defaultName: string) => {
+    setManufacturer(mfrId);
+    setDeviceName(defaultName);
+  };
 
   if (!isOpen) return null;
 
@@ -300,40 +313,46 @@ export const DeviceRegisterModal: React.FC<DeviceRegisterModalProps> = ({
                 </div>
               </div>
 
-              {/* Manufacturer & Model Name */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-900 font-bold mb-1">
-                    제조사 (브랜드)
+              {/* Chromebook Manufacturer Option Buttons (When deviceType is chromebook) */}
+              {deviceType === 'chromebook' && (
+                <div className="space-y-1.5 p-3 rounded-2xl bg-purple-50/50 border border-purple-100">
+                  <label className="block text-slate-900 font-black text-xs">
+                    제조사 / 크롬북 종류 <span className="text-purple-900 font-bold">(옵션 원클릭 선택)</span>
                   </label>
-                  <select
-                    value={manufacturer}
-                    onChange={(e) => setManufacturer(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-900 focus:outline-none bg-white font-bold"
-                  >
-                    <option value="삼성전자">삼성전자</option>
-                    <option value="LG">LG</option>
-                    <option value="LG전자">LG전자</option>
-                    <option value="레노버">레노버</option>
-                    <option value="ASUS">ASUS</option>
-                    <option value="로지텍">로지텍</option>
-                    <option value="ACTTO">ACTTO</option>
-                    <option value="기타">기타 제조사</option>
-                  </select>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {CHROMEBOOK_MFR_LIST.map((opt) => {
+                      const isSelected = manufacturer === opt.id || (opt.id === 'LG' && manufacturer === 'LG전자');
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => handleSelectChromebookMfr(opt.id, opt.defaultName)}
+                          className={`py-2 px-1 text-center rounded-xl border text-[11px] font-black transition-all ${
+                            isSelected
+                              ? 'bg-purple-900 text-white border-purple-900 shadow-xs'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-purple-50 hover:border-purple-300'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
+              )}
 
-                <div>
-                  <label className="block text-slate-900 font-bold mb-1">
-                    기기 메모 <span className="text-slate-400 font-normal">(선택)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="예: 2024년 구입 (자유 메모 가능)"
-                    value={modelName}
-                    onChange={(e) => setModelName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-900 focus:outline-none font-medium"
-                  />
-                </div>
+              {/* Model / Memo Note */}
+              <div>
+                <label className="block text-slate-900 font-bold mb-1">
+                  기기 메모 / 추가 정보 <span className="text-slate-400 font-normal">(선택)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="예: 2024년 구입 (자유 메모 가능)"
+                  value={modelName}
+                  onChange={(e) => setModelName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-900 focus:outline-none font-medium"
+                />
               </div>
 
               {/* Location & Status */}
@@ -487,36 +506,45 @@ export const DeviceRegisterModal: React.FC<DeviceRegisterModalProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-900 font-bold mb-1">
-                    제조사
+              {/* Chromebook Manufacturer Option Buttons (Batch Mode) */}
+              {deviceType === 'chromebook' && (
+                <div className="space-y-1.5 p-3 rounded-2xl bg-purple-50/50 border border-purple-100">
+                  <label className="block text-slate-900 font-black text-xs">
+                    제조사 / 크롬북 종류 <span className="text-purple-900 font-bold">(옵션 원클릭 선택)</span>
                   </label>
-                  <select
-                    value={manufacturer}
-                    onChange={(e) => setManufacturer(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-900 focus:outline-none bg-white font-bold"
-                  >
-                    <option value="삼성전자">삼성전자</option>
-                    <option value="LG">LG</option>
-                    <option value="LG전자">LG전자</option>
-                    <option value="레노버">레노버</option>
-                    <option value="ASUS">ASUS</option>
-                  </select>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {CHROMEBOOK_MFR_LIST.map((opt) => {
+                      const isSelected = manufacturer === opt.id || (opt.id === 'LG' && manufacturer === 'LG전자');
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => handleSelectChromebookMfr(opt.id, opt.defaultName)}
+                          className={`py-2 px-1 text-center rounded-xl border text-[11px] font-black transition-all ${
+                            isSelected
+                              ? 'bg-purple-900 text-white border-purple-900 shadow-xs'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-purple-50 hover:border-purple-300'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
+              )}
 
-                <div>
-                  <label className="block text-slate-900 font-bold mb-1">
-                    기기 메모 <span className="text-slate-400 font-normal">(선택)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={modelName}
-                    onChange={(e) => setModelName(e.target.value)}
-                    placeholder="예: 2024년 구입 등"
-                    className="w-full px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-900 focus:outline-none font-medium"
-                  />
-                </div>
+              <div>
+                <label className="block text-slate-900 font-bold mb-1">
+                  기기 메모 / 추가 정보 <span className="text-slate-400 font-normal">(선택)</span>
+                </label>
+                <input
+                  type="text"
+                  value={modelName}
+                  onChange={(e) => setModelName(e.target.value)}
+                  placeholder="예: 2024년 구입 등"
+                  className="w-full px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-900 focus:outline-none font-medium"
+                />
               </div>
             </form>
           )}

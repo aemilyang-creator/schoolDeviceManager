@@ -113,7 +113,7 @@ export function generateInitialDevices(): Device[] {
         managementNumber: '', // 관리번호는 비워두고 필요시 입력
         classDeviceNumber: num, // 반 번호 (1번 ~ 20번)
         deviceName: `${mfrInfo.name} 크롬북`,
-        modelName: mfrInfo.model,
+        modelName: '',
         manufacturer: mfrInfo.name,
         location: targetClass.name,
         grade: targetClass.grade,
@@ -167,7 +167,7 @@ export function generateInitialDevices(): Device[] {
         managementNumber: '',
         classDeviceNumber: num,
         deviceName: `${mfrInfo.name} 크롬북`,
-        modelName: mfrInfo.model,
+        modelName: '',
         manufacturer: mfrInfo.name,
         location: room,
         status,

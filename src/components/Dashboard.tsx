@@ -58,11 +58,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
+  const otherTotal = Object.entries(stats.chromebook.byManufacturer)
+    .filter(([key]) => !['삼성전자', 'LG', 'LG전자', '레노버', 'ASUS'].includes(key))
+    .reduce((sum, [, val]) => sum + ((val as { total?: number })?.total || 0), 0);
+
   const mfrList = [
-    { key: '삼성전자', name: 'SAMSUNG', total: stats.chromebook.byManufacturer['삼성전자']?.total || 0, normal: stats.chromebook.byManufacturer['삼성전자']?.normal || 0 },
+    { key: '삼성전자', name: '삼성전자', total: stats.chromebook.byManufacturer['삼성전자']?.total || 0, normal: stats.chromebook.byManufacturer['삼성전자']?.normal || 0 },
     { key: 'LG', name: 'LG', total: (stats.chromebook.byManufacturer['LG']?.total || 0) + (stats.chromebook.byManufacturer['LG전자']?.total || 0), normal: (stats.chromebook.byManufacturer['LG']?.normal || 0) + (stats.chromebook.byManufacturer['LG전자']?.normal || 0) },
-    { key: '레노버', name: 'LENOVO', total: stats.chromebook.byManufacturer['레노버']?.total || 0, normal: stats.chromebook.byManufacturer['레노버']?.normal || 0 },
+    { key: '레노버', name: '레노버', total: stats.chromebook.byManufacturer['레노버']?.total || 0, normal: stats.chromebook.byManufacturer['레노버']?.normal || 0 },
     { key: 'ASUS', name: 'ASUS', total: stats.chromebook.byManufacturer['ASUS']?.total || 0, normal: stats.chromebook.byManufacturer['ASUS']?.normal || 0 },
+    { key: '기타', name: '기타', total: otherTotal, normal: 0 },
   ];
 
   return (

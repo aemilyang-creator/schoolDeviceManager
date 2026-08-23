@@ -131,6 +131,18 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 mgmt = '';
               }
 
+              let modelName = d.modelName;
+              if (
+                typeof modelName === 'string' &&
+                (modelName.includes('Galaxy Chromebook') ||
+                  modelName.includes('11T90N') ||
+                  modelName.includes('300e Yoga') ||
+                  modelName.includes('Flip CR1') ||
+                  modelName.includes('CR1100'))
+              ) {
+                modelName = '';
+              }
+
               return {
                 ...d,
                 location,
@@ -138,6 +150,7 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 classNum: cNum,
                 classDeviceNumber: classNum,
                 managementNumber: mgmt,
+                modelName: modelName || '',
               };
             });
           }

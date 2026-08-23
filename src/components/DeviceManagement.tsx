@@ -18,7 +18,8 @@ import {
   ArrowUpDown,
   Wrench,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  Check
 } from 'lucide-react';
 import { useDevices } from '../context/DeviceContext';
 import { Device, DeviceType, DeviceStatus, DeviceFilterState } from '../types';
@@ -33,7 +34,7 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
   onSelectDevice,
   onOpenRegisterModal,
 }) => {
-  const { devices, deleteDevice, deleteMultipleDevices, batchUpdateStatus } = useDevices();
+  const { devices, deleteDevice, deleteMultipleDevices, batchUpdateStatus, updateDevice } = useDevices();
 
   // Helper to rank locations (1학년 1반 < 1학년 2반 < ... < 6학년 < 스마트실)
   const getLocationRank = (loc: string) => {
@@ -56,10 +57,44 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
   const [sortBy, setSortBy] = useState<'location' | 'classDeviceNumber' | 'managementNumber' | 'updatedAt' | 'status'>('location');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
+  // Status Change Modal State (When clicking status button)
+  const [statusEditDevice, setStatusEditDevice] = useState<Device | null>(null);
+  const [statusEditValue, setStatusEditValue] = useState<DeviceStatus>('normal');
+  const [statusIssueReason, setStatusIssueReason] = useState<string>('');
+
   // Multi-selection state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(50);
+
+  // Open status change dialog
+  const handleOpenStatusModal = (device: Device, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setStatusEditDevice(device);
+    setStatusEditValue(device.status);
+    setStatusIssueReason(device.issueDescription || device.repairDescription || '');
+  };
+
+  // Save status change with reason
+  const handleSaveStatus = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!statusEditDevice) return;
+
+    const statusNames = { normal: '정상', repair: '수리중', broken: '고장' };
+    const trimmedReason = statusIssueReason.trim();
+
+    updateDevice(
+      statusEditDevice.id,
+      {
+        status: statusEditValue,
+        issueDescription: statusEditValue === 'broken' ? (trimmedReason || '고장 접수') : (statusEditValue === 'repair' ? (trimmedReason || '수리 진행 중') : undefined),
+        repairDescription: statusEditValue === 'repair' ? (trimmedReason || '수리 진행 중') : undefined,
+      },
+      `전체 기기 관리에서 상태 변경 (${statusNames[statusEditDevice.status]} -> ${statusNames[statusEditValue]}) ${trimmedReason ? `[${trimmedReason}]` : ''}`
+    );
+
+    setStatusEditDevice(null);
+  };
 
   // Extract all unique locations sorted by grade & class order (1학년 1반 -> 6학년 -> 스마트실)
   const allLocations = useMemo(() => {
@@ -585,20 +620,39 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
                       <div className="font-black text-slate-900">{device.deviceName}</div>
                     </td>
 
-                    {/* 6. Status Badge */}
-                    <td className="py-4 px-4">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${badge.bg}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
-                        {badge.text}
-                      </span>
+                    {/* 6. Status Badge / Button */}
+                    <td className="py-4 px-4" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenStatusModal(device)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black border transition-all hover:scale-105 hover:shadow-xs active:scale-95 cursor-pointer font-sans ${badge.bg}`}
+                        title="클릭하여 상태 및 고장원인/수리내용 작성"
+                      >
+                        <span className={`w-2 h-2 rounded-full ${badge.dot}`} />
+                        <span>{badge.text}</span>
+                      </button>
                     </td>
 
-                    {/* 7. Issues / Notes */}
-                    <td className="py-4 px-5 text-slate-600 max-w-xs truncate font-medium">
-                      {device.issueDescription ? (
-                        <span className="text-rose-700 font-bold truncate">{device.issueDescription}</span>
-                      ) : device.repairDescription ? (
-                        <span className="text-amber-700 font-bold truncate">{device.repairDescription}</span>
+                    {/* 7. Issues / Repair Notes (Next to Status) */}
+                    <td className="py-4 px-5 text-xs font-medium" onClick={(e) => e.stopPropagation()}>
+                      {device.status === 'broken' ? (
+                        <div 
+                          onClick={() => handleOpenStatusModal(device)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 font-bold border border-rose-200 cursor-pointer hover:bg-rose-100 transition-colors max-w-xs"
+                          title="클릭하여 고장 원인 수정"
+                        >
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                          <span className="truncate">{device.issueDescription || '고장 원인 미기재 (클릭하여 입력)'}</span>
+                        </div>
+                      ) : device.status === 'repair' ? (
+                        <div 
+                          onClick={() => handleOpenStatusModal(device)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-bold border border-amber-200 cursor-pointer hover:bg-amber-100 transition-colors max-w-xs"
+                          title="클릭하여 수리 내용 수정"
+                        >
+                          <Wrench className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span className="truncate">{device.repairDescription || device.issueDescription || '수리 진행 중 (클릭하여 입력)'}</span>
+                        </div>
                       ) : device.note ? (
                         <span className="text-slate-500 truncate">{device.note}</span>
                       ) : (
@@ -613,7 +667,7 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
                           onClick={() => onSelectDevice(device)}
                           className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 rounded-xl font-bold transition-colors"
                         >
-                          상세 / 변경
+                          상세
                         </button>
                         <button
                           onClick={() => {
@@ -693,6 +747,191 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
           </div>
         )}
       </div>
+
+      {/* STATUS EDIT MODAL (상태 변경 및 고장원인/수리내용 작성) */}
+      {statusEditDevice && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-900" />
+                  <span>기기 상태 및 고장·수리 내용 관리</span>
+                </h3>
+                <p className="text-xs text-slate-500 font-bold mt-0.5">
+                  {statusEditDevice.location} {statusEditDevice.classDeviceNumber ? `${statusEditDevice.classDeviceNumber}번` : ''} · {statusEditDevice.deviceName}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStatusEditDevice(null)}
+                className="text-slate-400 hover:text-slate-600 font-bold p-1 rounded-lg text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveStatus} className="space-y-4 mt-4 text-xs">
+              {/* Status Selection Buttons */}
+              <div>
+                <label className="block font-black text-slate-900 mb-2">
+                  기기 상태 선택
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStatusEditValue('normal')}
+                    className={`py-3 px-3 rounded-2xl border font-black flex flex-col items-center gap-1.5 transition-all ${
+                      statusEditValue === 'normal'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-300'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-emerald-50 hover:border-emerald-200'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span className="text-xs">정상</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setStatusEditValue('repair')}
+                    className={`py-3 px-3 rounded-2xl border font-black flex flex-col items-center gap-1.5 transition-all ${
+                      statusEditValue === 'repair'
+                        ? 'bg-amber-500 text-white border-amber-500 shadow-md ring-2 ring-amber-300'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-amber-50 hover:border-amber-200'
+                    }`}
+                  >
+                    <Wrench className="w-5 h-5" />
+                    <span className="text-xs">수리중</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setStatusEditValue('broken')}
+                    className={`py-3 px-3 rounded-2xl border font-black flex flex-col items-center gap-1.5 transition-all ${
+                      statusEditValue === 'broken'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-md ring-2 ring-rose-300'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-rose-50 hover:border-rose-200'
+                    }`}
+                  >
+                    <AlertTriangle className="w-5 h-5" />
+                    <span className="text-xs">고장</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Reason / Details Input according to status */}
+              {statusEditValue === 'broken' && (
+                <div className="space-y-2 p-3.5 rounded-2xl bg-rose-50/70 border border-rose-200 animate-in fade-in duration-150">
+                  <label className="block font-black text-rose-950">
+                    고장 원인 및 세부 증상 입력 <span className="text-rose-600 font-bold">*</span>
+                  </label>
+                  {/* Quick preset tags */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      '화면/액정 파손',
+                      '키보드 불량',
+                      '충전 단자 불량',
+                      '전원 안 켜짐',
+                      '터치패드 오류',
+                      '힌지 파손',
+                      '외관 파손',
+                      '분실/미반납',
+                    ].map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => setStatusIssueReason(tag)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                          statusIssueReason === tag
+                            ? 'bg-rose-600 text-white border-rose-600'
+                            : 'bg-white text-rose-800 border-rose-200 hover:bg-rose-100'
+                        }`}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={statusIssueReason}
+                    onChange={(e) => setStatusIssueReason(e.target.value)}
+                    placeholder="고장 증상을 직접 입력하거나 위의 추천 태그를 누르세요 (예: 액정 파손으로 화면 미출력)"
+                    className="w-full p-2.5 bg-white border border-rose-200 rounded-xl focus:ring-2 focus:ring-rose-500 font-medium text-xs text-slate-900"
+                    required
+                  />
+                </div>
+              )}
+
+              {statusEditValue === 'repair' && (
+                <div className="space-y-2 p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 animate-in fade-in duration-150">
+                  <label className="block font-black text-amber-950">
+                    수리 진행 내용 및 AS 접수 현황 입력
+                  </label>
+                  {/* Quick preset tags */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      'AS 센터 접수 완료',
+                      '액정 패널 교체 중',
+                      '키보드 부품 수리 중',
+                      '배터리 점검 중',
+                      '부품 입고 대기',
+                      '제조사 수리 의뢰',
+                    ].map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => setStatusIssueReason(tag)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                          statusIssueReason === tag
+                            ? 'bg-amber-600 text-white border-amber-600'
+                            : 'bg-white text-amber-900 border-amber-200 hover:bg-amber-100'
+                        }`}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={statusIssueReason}
+                    onChange={(e) => setStatusIssueReason(e.target.value)}
+                    placeholder="수리 진행 상황을 입력하거나 위의 태그를 누르세요 (예: 2026-08-23 AS센터 액정 교체 접수)"
+                    className="w-full p-2.5 bg-white border border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-500 font-medium text-xs text-slate-900"
+                  />
+                </div>
+              )}
+
+              {statusEditValue === 'normal' && (
+                <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 text-emerald-900 space-y-1.5 animate-in fade-in duration-150">
+                  <p className="font-black text-xs flex items-center gap-1.5 text-emerald-800">
+                    <Check className="w-4 h-4 text-emerald-600" />
+                    정상 상태로 전환됩니다.
+                  </p>
+                  <p className="text-[11px] text-emerald-700 font-medium leading-relaxed">
+                    기기가 정상으로 표시되며 학생 수업 배정 및 사용이 가능해집니다. 기존 고장·수리 내역은 조치 완료로 변경됩니다.
+                  </p>
+                </div>
+              )}
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setStatusEditDevice(null)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-100"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-purple-900 text-white font-black hover:bg-purple-800 shadow-sm"
+                >
+                  상태 및 내용 저장
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
