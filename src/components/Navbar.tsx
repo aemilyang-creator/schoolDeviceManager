@@ -14,7 +14,11 @@ import {
   AlertTriangle, 
   XCircle, 
   UserCheck,
-  Package
+  Package,
+  Cloud,
+  RefreshCw,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import { useDevices } from '../context/DeviceContext';
 import { formatKoreanDateTime } from '../utils/formatters';
@@ -34,8 +38,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenReportModal,
   onOpenSettingsModal,
 }) => {
-  const { systemConfig, updateSystemConfig, stats } = useDevices();
+  const { systemConfig, stats, syncStatus, isOnline, syncDataNow } = useDevices();
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const [isManualSyncing, setIsManualSyncing] = useState<boolean>(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -43,6 +48,12 @@ export const Navbar: React.FC<NavbarProps> = ({
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const handleManualSync = async () => {
+    setIsManualSyncing(true);
+    await syncDataNow();
+    setTimeout(() => setIsManualSyncing(false), 800);
+  };
 
   return (
     <header className="bg-purple-900 text-white shadow-lg sticky top-0 z-40">
@@ -61,8 +72,36 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* Live Clock & Quick Status Indicators */}
-          <div className="flex items-center space-x-4">
-            <div className="hidden md:flex items-center space-x-1.5 text-purple-200 bg-purple-950/60 px-3 py-1 rounded-md border border-purple-800">
+          <div className="flex items-center space-x-3">
+            {/* Cloud Database Real-time Sync Status */}
+            <button
+              type="button"
+              onClick={handleManualSync}
+              title="Firebase 클라우드 실시간 DB 연결됨 (클릭 시 즉시 동기화)"
+              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border transition-all ${
+                syncStatus === 'synced'
+                  ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300 hover:bg-emerald-900/90'
+                  : syncStatus === 'syncing' || isManualSyncing
+                  ? 'bg-purple-950/80 border-purple-500/50 text-purple-200 animate-pulse'
+                  : syncStatus === 'offline' || !isOnline
+                  ? 'bg-amber-950/80 border-amber-500/50 text-amber-300'
+                  : 'bg-rose-950/80 border-rose-500/50 text-rose-300'
+              }`}
+            >
+              <Cloud className={`w-3.5 h-3.5 ${isManualSyncing ? 'animate-spin text-purple-300' : 'text-emerald-400'}`} />
+              <span className="hidden sm:inline">
+                {syncStatus === 'synced'
+                  ? '온라인 클라우드 DB 연동'
+                  : syncStatus === 'syncing' || isManualSyncing
+                  ? '실시간 동기화 중...'
+                  : syncStatus === 'offline'
+                  ? '오프라인 캐시 모드'
+                  : '동기화 점검'}
+              </span>
+              <RefreshCw className={`w-3 h-3 ml-0.5 opacity-70 ${isManualSyncing ? 'animate-spin' : ''}`} />
+            </button>
+
+            <div className="hidden lg:flex items-center space-x-1.5 text-purple-200 bg-purple-950/60 px-3 py-1 rounded-md border border-purple-800">
               <Clock className="w-3.5 h-3.5 text-purple-400" />
               <span className="font-mono font-medium text-purple-100">{formatKoreanDateTime(currentTime)}</span>
             </div>

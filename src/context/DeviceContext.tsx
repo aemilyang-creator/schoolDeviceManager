@@ -1,6 +1,16 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { Device, ConsumableInventory, SystemConfig, DeviceStatus, Manufacturer } from '../types';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import { Device, ConsumableInventory, SystemConfig, DeviceStatus } from '../types';
 import { generateInitialDevices, generateInitialConsumables, INITIAL_SYSTEM_CONFIG } from '../data/initialData';
+import {
+  db,
+  collection,
+  doc,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+  writeBatch,
+  getDocs
+} from '../firebase';
 
 interface DeviceStats {
   chromebook: {
@@ -30,31 +40,37 @@ interface DeviceStats {
   };
 }
 
+export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error';
+
 interface DeviceContextType {
   devices: Device[];
   consumables: ConsumableInventory[];
   systemConfig: SystemConfig;
   stats: DeviceStats;
-  addDevice: (newDevice: Omit<Device, 'id' | 'createdAt' | 'updatedAt'>) => void;
-  batchAddDevices: (devices: Array<Omit<Device, 'id' | 'createdAt' | 'updatedAt'>>) => void;
-  updateDevice: (id: string, updates: Partial<Device>, reason?: string) => void;
-  deleteDevice: (id: string) => void;
-  deleteMultipleDevices: (ids: string[]) => void;
-  batchUpdateStatus: (ids: string[], status: DeviceStatus, reason?: string) => void;
+  syncStatus: SyncStatus;
+  isOnline: boolean;
+  lastSyncedAt: Date | null;
+  addDevice: (newDevice: Omit<Device, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  batchAddDevices: (devices: Array<Omit<Device, 'id' | 'createdAt' | 'updatedAt'>>) => Promise<void>;
+  updateDevice: (id: string, updates: Partial<Device>, reason?: string) => Promise<void>;
+  deleteDevice: (id: string) => Promise<void>;
+  deleteMultipleDevices: (ids: string[]) => Promise<void>;
+  batchUpdateStatus: (ids: string[], status: DeviceStatus, reason?: string) => Promise<void>;
   updateConsumableCount: (
     id: string,
     field: 'mouseWiredCount' | 'mouseWirelessCount' | 'earphoneCount' | 'mouseSpareCount' | 'earphoneSpareCount',
     delta: number
-  ) => void;
-  updateConsumableMemo: (id: string, memo: string) => void;
-  updateSystemConfig: (updates: Partial<SystemConfig>) => void;
-  addClass: (grade: number, classNum: number, autoCreateChromebooks?: boolean) => void;
-  deleteClass: (grade: number, classNum: number) => void;
-  addGrade: (grade: number) => void;
-  deleteGrade: (grade: number) => void;
-  resetToDefaultData: () => void;
+  ) => Promise<void>;
+  updateConsumableMemo: (id: string, memo: string) => Promise<void>;
+  updateSystemConfig: (updates: Partial<SystemConfig>) => Promise<void>;
+  addClass: (grade: number, classNum: number, autoCreateChromebooks?: boolean) => Promise<void>;
+  deleteClass: (grade: number, classNum: number) => Promise<void>;
+  addGrade: (grade: number) => Promise<void>;
+  deleteGrade: (grade: number) => Promise<void>;
+  resetToDefaultData: () => Promise<void>;
   exportDataToJson: () => string;
-  importDataFromJson: (jsonStr: string) => boolean;
+  importDataFromJson: (jsonStr: string) => Promise<boolean>;
+  syncDataNow: () => Promise<void>;
 }
 
 const STORAGE_KEYS = {
@@ -65,99 +81,68 @@ const STORAGE_KEYS = {
 
 const DeviceContext = createContext<DeviceContextType | undefined>(undefined);
 
+// Helper function to remove undefined values for Firestore compatibility
+function cleanForFirestore<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return data;
+  }
+  if (Array.isArray(data)) {
+    return data.map((item) => cleanForFirestore(item)) as unknown as T;
+  }
+  if (typeof data === 'object') {
+    const cleaned: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data as Record<string, any>)) {
+      if (value !== undefined) {
+        cleaned[key] = cleanForFirestore(value);
+      }
+    }
+    return cleaned as T;
+  }
+  return data;
+}
+
+// Helper function to upload items in batches (Firestore max 500 ops per batch)
+async function batchWriteDevices(deviceList: Device[]) {
+  const CHUNK_SIZE = 350;
+  for (let i = 0; i < deviceList.length; i += CHUNK_SIZE) {
+    const chunk = deviceList.slice(i, i + CHUNK_SIZE);
+    const batch = writeBatch(db);
+    for (const d of chunk) {
+      const ref = doc(db, 'devices', d.id);
+      batch.set(ref, cleanForFirestore(d), { merge: true });
+    }
+    await batch.commit();
+  }
+}
+
+async function batchWriteConsumables(consList: ConsumableInventory[]) {
+  const batch = writeBatch(db);
+  for (const c of consList) {
+    const ref = doc(db, 'consumables', c.id);
+    batch.set(ref, cleanForFirestore(c), { merge: true });
+  }
+  await batch.commit();
+}
+
 export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Sync state
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('syncing');
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const [isInitialLoadDone, setIsInitialLoadDone] = useState<boolean>(false);
+
+  // Local state initialized with clean cache or initial generators
   const [devices, setDevices] = useState<Device[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.DEVICES);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Filter out 1학년 and 2학년 devices per user's requirement (3학년 1반부터 시작)
-          const validDevices = parsed.filter((d: any) => {
-            if (!d.location) return true;
-            if (d.location.startsWith('1학년') || d.location.startsWith('2학년')) return false;
-            if (d.grade === 1 || d.grade === 2) return false;
-            return true;
-          });
-
-          if (validDevices.length > 0) {
-            // Track device count per location to assign classDeviceNumber if missing
-            const locationCounts: Record<string, number> = {};
-
-            return validDevices.map((d: any) => {
-              let classNum = d.classDeviceNumber;
-              let mgmt = d.managementNumber || '';
-
-              // Cleanly migrate legacy special room locations to '스마트실'
-              let location = d.location || '스마트실';
-              if (
-                location.includes('컴퓨터') || 
-                location.includes('AI 스마트') || 
-                location.includes('보관실') || 
-                location === '특별실'
-              ) {
-                location = '스마트실';
-              }
-
-              // Auto extract grade & classNum if not set
-              let grade = d.grade;
-              let cNum = d.classNum;
-              const locMatch = location.match(/(\d+)학년\s*(\d+)반/);
-              if (locMatch) {
-                if (!grade) grade = parseInt(locMatch[1], 10);
-                if (!cNum) cNum = parseInt(locMatch[2], 10);
-              }
-
-              locationCounts[location] = (locationCounts[location] || 0) + 1;
-
-              // If classDeviceNumber is undefined/null, infer from note, id, mgmt, or count
-              if (classNum === undefined || classNum === null) {
-                const noteMatch = typeof d.note === 'string' ? d.note.match(/(\d+)번/) : null;
-                const idMatch = typeof d.id === 'string' ? d.id.match(/-(\d+)$/) : null;
-                const mgmtMatch = typeof mgmt === 'string' ? mgmt.match(/^(\d+)번$/) || mgmt.match(/(\d+)번/) : null;
-
-                if (noteMatch) {
-                  classNum = parseInt(noteMatch[1], 10);
-                } else if (idMatch) {
-                  classNum = parseInt(idMatch[1], 10);
-                } else if (mgmtMatch) {
-                  classNum = parseInt(mgmtMatch[1], 10);
-                } else {
-                  classNum = locationCounts[location];
-                }
-              }
-
-              if (typeof mgmt === 'string' && mgmt.match(/^(\d+)번$/)) {
-                mgmt = '';
-              }
-
-              let modelName = d.modelName;
-              if (
-                typeof modelName === 'string' &&
-                (modelName.includes('Galaxy Chromebook') ||
-                  modelName.includes('11T90N') ||
-                  modelName.includes('300e Yoga') ||
-                  modelName.includes('Flip CR1') ||
-                  modelName.includes('CR1100'))
-              ) {
-                modelName = '';
-              }
-
-              return {
-                ...d,
-                location,
-                grade,
-                classNum: cNum,
-                classDeviceNumber: classNum,
-                managementNumber: mgmt,
-                modelName: modelName || '',
-              };
-            });
-          }
+          return parsed;
         }
       }
     } catch (e) {
-      console.error('Failed to load devices from storage', e);
+      console.error('Failed to load devices from localStorage', e);
     }
     return generateInitialDevices();
   });
@@ -167,20 +152,12 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const saved = localStorage.getItem(STORAGE_KEYS.CONSUMABLES);
       if (saved) {
         const parsed: ConsumableInventory[] = JSON.parse(saved);
-        const filtered = parsed.filter(c => !c.location.startsWith('1학년') && !c.location.startsWith('2학년'));
-        if (filtered.length > 0) {
-          let hasSmart = filtered.some(c => c.location === '스마트실');
-          if (!hasSmart) {
-            const legacySpecial = filtered.find(c => c.location === '제1컴퓨터실' || c.location.includes('컴퓨터') || c.location.includes('스마트'));
-            if (legacySpecial) {
-              legacySpecial.location = '스마트실';
-            }
-          }
-          return filtered;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
         }
       }
     } catch (e) {
-      console.error('Failed to load consumables from storage', e);
+      console.error('Failed to load consumables from localStorage', e);
     }
     return generateInitialConsumables();
   });
@@ -190,45 +167,40 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const saved = localStorage.getItem(STORAGE_KEYS.CONFIG);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.schoolName === '제주이도초등학교') {
-          parsed.schoolName = '제주초등학교';
-        }
-        let customGrades = parsed.customGrades;
-        if (Array.isArray(customGrades)) {
-          customGrades = customGrades.filter((g: number) => g >= 3);
-          if (customGrades.length === 0) customGrades = [3, 4, 5, 6];
-        } else {
-          customGrades = [3, 4, 5, 6];
-        }
-
-        const customClasses = { ...(parsed.customClasses || {}) };
-        delete customClasses[1];
-        delete customClasses[2];
-        if (!customClasses[3]) customClasses[3] = [1, 2, 3, 4, 5];
-        if (!customClasses[4]) customClasses[4] = [1, 2, 3, 4, 5, 6];
-        if (!customClasses[5]) customClasses[5] = [1, 2, 3, 4, 5, 6];
-        if (!customClasses[6]) customClasses[6] = [1, 2, 3, 4, 5, 6];
-
-        return { 
-          ...INITIAL_SYSTEM_CONFIG, 
-          ...parsed, 
-          customGrades,
-          customClasses,
-          schoolName: parsed.schoolName || '제주초등학교' 
+        return {
+          ...INITIAL_SYSTEM_CONFIG,
+          ...parsed,
+          schoolName: parsed.schoolName || '제주초등학교',
         };
       }
     } catch (e) {
-      console.error('Failed to load config from storage', e);
+      console.error('Failed to load config from localStorage', e);
     }
     return INITIAL_SYSTEM_CONFIG;
   });
 
-  // Save to localStorage when changed
+  // Track online/offline status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => {
+      setIsOnline(false);
+      setSyncStatus('offline');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Sync to local storage for instant offline fallback
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEYS.DEVICES, JSON.stringify(devices));
     } catch (e) {
-      console.error('Failed to save devices', e);
+      console.warn('LocalStorage save warning:', e);
     }
   }, [devices]);
 
@@ -236,7 +208,7 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     try {
       localStorage.setItem(STORAGE_KEYS.CONSUMABLES, JSON.stringify(consumables));
     } catch (e) {
-      console.error('Failed to save consumables', e);
+      console.warn('LocalStorage save warning:', e);
     }
   }, [consumables]);
 
@@ -244,9 +216,119 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     try {
       localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(systemConfig));
     } catch (e) {
-      console.error('Failed to save config', e);
+      console.warn('LocalStorage save warning:', e);
     }
   }, [systemConfig]);
+
+  // Real-time Firestore Listeners
+  useEffect(() => {
+    let unsubscribeDevices: (() => void) | null = null;
+    let unsubscribeConsumables: (() => void) | null = null;
+    let unsubscribeConfig: (() => void) | null = null;
+
+    const setupFirestoreListeners = async () => {
+      try {
+        setSyncStatus('syncing');
+
+        // 1. Devices Listener
+        const devicesCol = collection(db, 'devices');
+        unsubscribeDevices = onSnapshot(
+          devicesCol,
+          async (snapshot) => {
+            if (snapshot.empty) {
+              // If remote Firestore is empty, seed initial devices
+              console.log('Remote Firestore devices is empty. Seeding initial devices to Cloud...');
+              const initialDevs = generateInitialDevices();
+              setDevices(initialDevs);
+              try {
+                await batchWriteDevices(initialDevs);
+              } catch (err) {
+                console.error('Error seeding devices to Firestore:', err);
+              }
+            } else {
+              const remoteDevices: Device[] = [];
+              snapshot.forEach((docSnap) => {
+                remoteDevices.push(docSnap.data() as Device);
+              });
+              setDevices(remoteDevices);
+            }
+            setLastSyncedAt(new Date());
+            setSyncStatus('synced');
+            setIsInitialLoadDone(true);
+          },
+          (error) => {
+            console.error('Firestore devices listener error:', error);
+            setSyncStatus('error');
+          }
+        );
+
+        // 2. Consumables Listener
+        const consumablesCol = collection(db, 'consumables');
+        unsubscribeConsumables = onSnapshot(
+          consumablesCol,
+          async (snapshot) => {
+            if (snapshot.empty) {
+              console.log('Remote Firestore consumables is empty. Seeding initial consumables to Cloud...');
+              const initialCons = generateInitialConsumables();
+              setConsumables(initialCons);
+              try {
+                await batchWriteConsumables(initialCons);
+              } catch (err) {
+                console.error('Error seeding consumables to Firestore:', err);
+              }
+            } else {
+              const remoteCons: ConsumableInventory[] = [];
+              snapshot.forEach((docSnap) => {
+                remoteCons.push(docSnap.data() as ConsumableInventory);
+              });
+              setConsumables(remoteCons);
+            }
+            setLastSyncedAt(new Date());
+          },
+          (error) => {
+            console.error('Firestore consumables listener error:', error);
+          }
+        );
+
+        // 3. System Config Listener
+        const configDocRef = doc(db, 'systemConfig', 'main');
+        unsubscribeConfig = onSnapshot(
+          configDocRef,
+          async (docSnap) => {
+            if (!docSnap.exists()) {
+              console.log('Remote Firestore systemConfig is empty. Seeding initial config to Cloud...');
+              setSystemConfig(INITIAL_SYSTEM_CONFIG);
+              try {
+                await setDoc(configDocRef, cleanForFirestore(INITIAL_SYSTEM_CONFIG));
+              } catch (err) {
+                console.error('Error seeding config to Firestore:', err);
+              }
+            } else {
+              setSystemConfig({
+                ...INITIAL_SYSTEM_CONFIG,
+                ...(docSnap.data() as SystemConfig),
+              });
+            }
+            setLastSyncedAt(new Date());
+          },
+          (error) => {
+            console.error('Firestore config listener error:', error);
+          }
+        );
+      } catch (err) {
+        console.error('Failed to setup Firestore listeners:', err);
+        setSyncStatus('error');
+      }
+    };
+
+    setupFirestoreListeners();
+
+    return () => {
+      if (unsubscribeDevices) unsubscribeDevices();
+      if (unsubscribeConsumables) unsubscribeConsumables();
+      if (unsubscribeConfig) unsubscribeConfig();
+    };
+  }, []);
 
   // Compute live statistics matching PRD expectations
   const stats = useMemo<DeviceStats>(() => {
@@ -318,7 +400,33 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, [devices, consumables]);
 
-  const addDevice = (newDeviceData: Omit<Device, 'id' | 'createdAt' | 'updatedAt'>) => {
+  // Force re-sync with Firestore
+  const syncDataNow = useCallback(async () => {
+    try {
+      setSyncStatus('syncing');
+      const devDocs = await getDocs(collection(db, 'devices'));
+      const consDocs = await getDocs(collection(db, 'consumables'));
+      
+      const remoteDevices: Device[] = [];
+      devDocs.forEach((d) => remoteDevices.push(d.data() as Device));
+      
+      const remoteCons: ConsumableInventory[] = [];
+      consDocs.forEach((c) => remoteCons.push(c.data() as ConsumableInventory));
+
+      if (remoteDevices.length > 0) setDevices(remoteDevices);
+      if (remoteCons.length > 0) setConsumables(remoteCons);
+
+      setLastSyncedAt(new Date());
+      setSyncStatus('synced');
+    } catch (e) {
+      console.error('Manual sync error:', e);
+      setSyncStatus('error');
+    }
+  }, []);
+
+  // CRUD Methods connected to Firestore
+
+  const addDevice = async (newDeviceData: Omit<Device, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString().split('T')[0];
     const loc = newDeviceData.location || '스마트실';
     const locMatch = loc.match(/(\d+)학년\s*(\d+)반/);
@@ -329,7 +437,6 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (!classNum) classNum = parseInt(locMatch[2], 10);
     }
 
-    // Determine classDeviceNumber if not specified
     let cDevNum = newDeviceData.classDeviceNumber;
     if (cDevNum === undefined || cDevNum === null) {
       const existingInLoc = devices.filter((d) => d.location === loc && d.classDeviceNumber !== undefined);
@@ -358,49 +465,65 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       ],
     };
 
+    // Optimistic local update
     setDevices((prev) => [newDevice, ...prev]);
 
-    // If this device belongs to a grade & class that isn't registered yet, auto-register in systemConfig & consumables
-    if (grade && classNum) {
-      setSystemConfig((prev) => {
-        const currentGrades = prev.customGrades ? [...prev.customGrades] : [3, 4, 5, 6];
-        const nextGrades = currentGrades.includes(grade!) ? currentGrades : [...currentGrades, grade!].sort((a, b) => a - b);
-        const currentClasses: Record<number, number[]> = { ...(prev.customClasses || {}) };
-        const gradeClasses = currentClasses[grade!] ? [...currentClasses[grade!]] : [];
-        if (!gradeClasses.includes(classNum!)) {
-          gradeClasses.push(classNum!);
-          gradeClasses.sort((a, b) => a - b);
-        }
-        currentClasses[grade!] = gradeClasses;
-        return {
-          ...prev,
-          customGrades: nextGrades,
-          customClasses: currentClasses,
-        };
-      });
+    // Save to Firestore
+    try {
+      await setDoc(doc(db, 'devices', newDevice.id), cleanForFirestore(newDevice));
+    } catch (e) {
+      console.error('Firestore save device error:', e);
+    }
 
-      setConsumables((prev) => {
-        if (prev.some((c) => c.location === loc)) return prev;
-        return [
-          ...prev,
-          {
-            id: `cons-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-            location: loc,
-            deviceType: 'mouse',
-            mouseWiredCount: 0,
-            mouseWirelessCount: 20,
-            earphoneCount: 15,
-            mouseSpareCount: 0,
-            earphoneSpareCount: 0,
-            requestMemo: '',
-            updatedAt: now,
-          },
-        ];
-      });
+    // Auto-register class if needed
+    if (grade && classNum) {
+      const currentGrades = systemConfig.customGrades ? [...systemConfig.customGrades] : [3, 4, 5, 6];
+      const nextGrades = currentGrades.includes(grade) ? currentGrades : [...currentGrades, grade].sort((a, b) => a - b);
+      const currentClasses: Record<number, number[]> = { ...(systemConfig.customClasses || {}) };
+      const gradeClasses = currentClasses[grade] ? [...currentClasses[grade]] : [];
+      if (!gradeClasses.includes(classNum)) {
+        gradeClasses.push(classNum);
+        gradeClasses.sort((a, b) => a - b);
+      }
+      currentClasses[grade] = gradeClasses;
+
+      const updatedConfig: SystemConfig = {
+        ...systemConfig,
+        customGrades: nextGrades,
+        customClasses: currentClasses,
+      };
+
+      setSystemConfig(updatedConfig);
+      try {
+        await setDoc(doc(db, 'systemConfig', 'main'), cleanForFirestore(updatedConfig));
+      } catch (err) {
+        console.error('Firestore config update error:', err);
+      }
+
+      if (!consumables.some((c) => c.location === loc)) {
+        const newCons: ConsumableInventory = {
+          id: `cons-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+          location: loc,
+          deviceType: 'mouse',
+          mouseWiredCount: 0,
+          mouseWirelessCount: 20,
+          earphoneCount: 15,
+          mouseSpareCount: 0,
+          earphoneSpareCount: 0,
+          requestMemo: '',
+          updatedAt: now,
+        };
+        setConsumables((prev) => [...prev, newCons]);
+        try {
+          await setDoc(doc(db, 'consumables', newCons.id), cleanForFirestore(newCons));
+        } catch (err) {
+          console.error('Firestore consumable create error:', err);
+        }
+      }
     }
   };
 
-  const batchAddDevices = (newDevicesData: Array<Omit<Device, 'id' | 'createdAt' | 'updatedAt'>>) => {
+  const batchAddDevices = async (newDevicesData: Array<Omit<Device, 'id' | 'createdAt' | 'updatedAt'>>) => {
     const now = new Date().toISOString().split('T')[0];
     const generated: Device[] = newDevicesData.map((data, idx) => {
       const loc = data.location || '스마트실';
@@ -434,10 +557,18 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
 
     setDevices((prev) => [...generated, ...prev]);
+
+    try {
+      await batchWriteDevices(generated);
+    } catch (e) {
+      console.error('Firestore batchAdd error:', e);
+    }
   };
 
-  const updateDevice = (id: string, updates: Partial<Device>, reason?: string) => {
+  const updateDevice = async (id: string, updates: Partial<Device>, reason?: string) => {
     const now = new Date().toISOString().split('T')[0];
+    let updatedTargetDevice: Device | null = null;
+
     setDevices((prev) =>
       prev.map((d) => {
         if (d.id !== id) return d;
@@ -457,28 +588,59 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           });
         }
 
-        return {
+        const updated: Device = {
           ...d,
           ...updates,
           updatedAt: now,
           history: newHistory,
         };
+        updatedTargetDevice = updated;
+        return updated;
       })
     );
+
+    if (updatedTargetDevice) {
+      try {
+        await setDoc(doc(db, 'devices', id), cleanForFirestore(updatedTargetDevice), { merge: true });
+      } catch (e) {
+        console.error('Firestore updateDevice error:', e);
+      }
+    }
   };
 
-  const deleteDevice = (id: string) => {
+  const deleteDevice = async (id: string) => {
     setDevices((prev) => prev.filter((d) => d.id !== id));
+    try {
+      await deleteDoc(doc(db, 'devices', id));
+    } catch (e) {
+      console.error('Firestore deleteDevice error:', e);
+    }
   };
 
-  const deleteMultipleDevices = (ids: string[]) => {
+  const deleteMultipleDevices = async (ids: string[]) => {
     const idSet = new Set(ids);
     setDevices((prev) => prev.filter((d) => !idSet.has(d.id)));
+
+    try {
+      const CHUNK = 300;
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const slice = ids.slice(i, i + CHUNK);
+        const batch = writeBatch(db);
+        for (const id of slice) {
+          batch.delete(doc(db, 'devices', id));
+        }
+        await batch.commit();
+      }
+    } catch (e) {
+      console.error('Firestore deleteMultipleDevices error:', e);
+    }
   };
 
-  const batchUpdateStatus = (ids: string[], status: DeviceStatus, reason?: string) => {
+  const batchUpdateStatus = async (ids: string[], status: DeviceStatus, reason?: string) => {
     const now = new Date().toISOString().split('T')[0];
     const idSet = new Set(ids);
+    const updatedDevices: Device[] = [];
+
     setDevices((prev) =>
       prev.map((d) => {
         if (!idSet.has(d.id)) return d;
@@ -492,115 +654,155 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           userName: systemConfig.digitalTutorName,
         });
 
-        return {
+        const updated: Device = {
           ...d,
           status,
           issueDescription: status === 'broken' ? reason || d.issueDescription : d.issueDescription,
-          repairDescription: status === 'repair' ? reason || d.repairDescription : status === 'normal' ? '수리 완료 조치' : d.repairDescription,
+          repairDescription:
+            status === 'repair'
+              ? reason || d.repairDescription
+              : status === 'normal'
+              ? '수리 완료 조치'
+              : d.repairDescription,
           updatedAt: now,
           history: newHistory,
         };
+        updatedDevices.push(updated);
+        return updated;
       })
     );
+
+    try {
+      await batchWriteDevices(updatedDevices);
+    } catch (e) {
+      console.error('Firestore batchUpdateStatus error:', e);
+    }
   };
 
-  const updateConsumableCount = (
+  const updateConsumableCount = async (
     id: string,
     field: 'mouseWiredCount' | 'mouseWirelessCount' | 'earphoneCount' | 'mouseSpareCount' | 'earphoneSpareCount',
     delta: number
   ) => {
     const now = new Date().toISOString().split('T')[0];
+    let targetCons: ConsumableInventory | null = null;
+
     setConsumables((prev) =>
       prev.map((c) => {
         if (c.id !== id) return c;
         const currentVal = c[field] || 0;
         const newVal = Math.max(0, currentVal + delta);
-        return {
+        const updated: ConsumableInventory = {
           ...c,
           [field]: newVal,
           updatedAt: now,
         };
+        targetCons = updated;
+        return updated;
       })
     );
+
+    if (targetCons) {
+      try {
+        await setDoc(doc(db, 'consumables', id), cleanForFirestore(targetCons), { merge: true });
+      } catch (e) {
+        console.error('Firestore updateConsumableCount error:', e);
+      }
+    }
   };
 
-  const updateConsumableMemo = (id: string, memo: string) => {
+  const updateConsumableMemo = async (id: string, memo: string) => {
     const now = new Date().toISOString().split('T')[0];
+    let targetCons: ConsumableInventory | null = null;
+
     setConsumables((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, requestMemo: memo, updatedAt: now } : c))
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        const updated: ConsumableInventory = { ...c, requestMemo: memo, updatedAt: now };
+        targetCons = updated;
+        return updated;
+      })
     );
+
+    if (targetCons) {
+      try {
+        await setDoc(doc(db, 'consumables', id), cleanForFirestore(targetCons), { merge: true });
+      } catch (e) {
+        console.error('Firestore updateConsumableMemo error:', e);
+      }
+    }
   };
 
-  const updateSystemConfig = (updates: Partial<SystemConfig>) => {
-    setSystemConfig((prev) => ({ ...prev, ...updates }));
+  const updateSystemConfig = async (updates: Partial<SystemConfig>) => {
+    const updated: SystemConfig = { ...systemConfig, ...updates };
+    setSystemConfig(updated);
+    try {
+      await setDoc(doc(db, 'systemConfig', 'main'), cleanForFirestore(updated), { merge: true });
+    } catch (e) {
+      console.error('Firestore updateSystemConfig error:', e);
+    }
   };
 
-  const addClass = (grade: number, classNum: number, autoCreateChromebooks = true) => {
+  const addClass = async (grade: number, classNum: number, autoCreateChromebooks = true) => {
     const locName = `${grade}학년 ${classNum}반`;
     const now = new Date().toISOString().split('T')[0];
 
-    // 1. Update system config classes
-    setSystemConfig((prev) => {
-      const currentGrades = prev.customGrades && prev.customGrades.length > 0
-        ? [...prev.customGrades]
-        : [3, 4, 5, 6];
-      const nextGrades = currentGrades.includes(grade)
-        ? currentGrades
-        : [...currentGrades, grade].sort((a, b) => a - b);
+    const currentGrades = systemConfig.customGrades && systemConfig.customGrades.length > 0
+      ? [...systemConfig.customGrades]
+      : [3, 4, 5, 6];
+    const nextGrades = currentGrades.includes(grade)
+      ? currentGrades
+      : [...currentGrades, grade].sort((a, b) => a - b);
 
-      const currentClasses: Record<number, number[]> = {
-        ...(prev.customClasses || {
-          3: [1, 2, 3, 4, 5],
-          4: [1, 2, 3, 4, 5, 6],
-          5: [1, 2, 3, 4, 5, 6],
-          6: [1, 2, 3, 4, 5, 6],
-        }),
-      };
-      const gradeClasses = currentClasses[grade] ? [...currentClasses[grade]] : [];
-      if (!gradeClasses.includes(classNum)) {
-        gradeClasses.push(classNum);
-        gradeClasses.sort((a, b) => a - b);
-      }
-      currentClasses[grade] = gradeClasses;
+    const currentClasses: Record<number, number[]> = {
+      ...(systemConfig.customClasses || {
+        3: [1, 2, 3, 4, 5],
+        4: [1, 2, 3, 4, 5, 6],
+        5: [1, 2, 3, 4, 5, 6],
+        6: [1, 2, 3, 4, 5, 6],
+      }),
+    };
+    const gradeClasses = currentClasses[grade] ? currentClasses[grade].filter((c) => c !== classNum) : [];
+    if (!gradeClasses.includes(classNum)) {
+      gradeClasses.push(classNum);
+      gradeClasses.sort((a, b) => a - b);
+    }
+    currentClasses[grade] = gradeClasses;
 
-      return {
-        ...prev,
-        customGrades: nextGrades,
-        customClasses: currentClasses,
-      };
-    });
+    const newConfig: SystemConfig = {
+      ...systemConfig,
+      customGrades: nextGrades,
+      customClasses: currentClasses,
+    };
+    setSystemConfig(newConfig);
 
-    // 2. Add consumable record if not present
+    const newCons: ConsumableInventory = {
+      id: `cons-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      location: locName,
+      deviceType: 'mouse',
+      mouseWiredCount: 0,
+      mouseWirelessCount: 20,
+      earphoneCount: 20,
+      mouseSpareCount: 0,
+      earphoneSpareCount: 0,
+      requestMemo: '',
+      updatedAt: now,
+    };
     setConsumables((prev) => {
       if (prev.some((c) => c.location === locName)) return prev;
-      return [
-        ...prev,
-        {
-          id: `cons-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-          location: locName,
-          deviceType: 'mouse',
-          mouseWiredCount: 0,
-          mouseWirelessCount: 20,
-          earphoneCount: 20,
-          mouseSpareCount: 0,
-          earphoneSpareCount: 0,
-          requestMemo: '',
-          updatedAt: now,
-        },
-      ];
+      return [...prev, newCons];
     });
 
-    // 3. Auto-generate 1~20 Chromebooks if requested
+    const newDevs: Device[] = [];
     if (autoCreateChromebooks) {
-      const newDevs: Device[] = [];
       for (let i = 1; i <= 20; i++) {
         newDevs.push({
           id: `device-cb-${grade}-${classNum}-${i}-${Date.now()}`,
           deviceType: 'chromebook',
-          managementNumber: '', // 관리번호는 빈칸으로 추후 입력
-          classDeviceNumber: i, // 반 번호 (1번 ~ 20번)
+          managementNumber: '',
+          classDeviceNumber: i,
           deviceName: '삼성 갤럭시 크롬북',
-          modelName: 'Galaxy Chromebook 2 360',
+          modelName: '',
           manufacturer: '삼성전자',
           location: locName,
           grade,
@@ -614,90 +816,104 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
       setDevices((prev) => [...prev, ...newDevs]);
     }
+
+    try {
+      await setDoc(doc(db, 'systemConfig', 'main'), cleanForFirestore(newConfig), { merge: true });
+      await setDoc(doc(db, 'consumables', newCons.id), cleanForFirestore(newCons), { merge: true });
+      if (newDevs.length > 0) {
+        await batchWriteDevices(newDevs);
+      }
+    } catch (e) {
+      console.error('Firestore addClass error:', e);
+    }
   };
 
-  const deleteClass = (grade: number, classNum: number) => {
+  const deleteClass = async (grade: number, classNum: number) => {
     const locName = `${grade}학년 ${classNum}반`;
 
-    // 1. Remove devices in this class
-    setDevices((prev) => prev.filter((d) => d.location !== locName && !(d.grade === grade && d.classNum === classNum)));
+    const devsToDelete = devices.filter((d) => d.location === locName || (d.grade === grade && d.classNum === classNum));
+    const consToDelete = consumables.filter((c) => c.location === locName);
 
-    // 2. Remove consumables for this class
+    setDevices((prev) => prev.filter((d) => d.location !== locName && !(d.grade === grade && d.classNum === classNum)));
     setConsumables((prev) => prev.filter((c) => c.location !== locName));
 
-    // 3. Update config
-    setSystemConfig((prev) => {
-      const currentClasses: Record<number, number[]> = {
-        ...(prev.customClasses || {
-          3: [1, 2, 3, 4, 5],
-          4: [1, 2, 3, 4, 5, 6],
-          5: [1, 2, 3, 4, 5, 6],
-          6: [1, 2, 3, 4, 5, 6],
-        }),
-      };
-      const gradeClasses = currentClasses[grade] ? currentClasses[grade].filter((c) => c !== classNum) : [];
-      currentClasses[grade] = gradeClasses;
+    const currentClasses: Record<number, number[]> = {
+      ...(systemConfig.customClasses || {
+        3: [1, 2, 3, 4, 5],
+        4: [1, 2, 3, 4, 5, 6],
+        5: [1, 2, 3, 4, 5, 6],
+        6: [1, 2, 3, 4, 5, 6],
+      }),
+    };
+    const gradeClasses = currentClasses[grade] ? currentClasses[grade].filter((c) => c !== classNum) : [];
+    currentClasses[grade] = gradeClasses;
 
-      return {
-        ...prev,
-        customClasses: currentClasses,
-      };
-    });
+    const newConfig: SystemConfig = {
+      ...systemConfig,
+      customClasses: currentClasses,
+    };
+    setSystemConfig(newConfig);
+
+    try {
+      await setDoc(doc(db, 'systemConfig', 'main'), cleanForFirestore(newConfig), { merge: true });
+      for (const d of devsToDelete) {
+        await deleteDoc(doc(db, 'devices', d.id));
+      }
+      for (const c of consToDelete) {
+        await deleteDoc(doc(db, 'consumables', c.id));
+      }
+    } catch (e) {
+      console.error('Firestore deleteClass error:', e);
+    }
   };
 
-  const addGrade = (grade: number) => {
+  const addGrade = async (grade: number) => {
     const locName = `${grade}학년 1반`;
     const now = new Date().toISOString().split('T')[0];
 
-    // 1. Atomically update system config with the new grade and its 1반
-    setSystemConfig((prev) => {
-      const currentGrades = prev.customGrades && prev.customGrades.length > 0
-        ? [...prev.customGrades]
-        : [3, 4, 5, 6];
-      const nextGrades = currentGrades.includes(grade)
-        ? currentGrades
-        : [...currentGrades, grade].sort((a, b) => a - b);
+    const currentGrades = systemConfig.customGrades && systemConfig.customGrades.length > 0
+      ? [...systemConfig.customGrades]
+      : [3, 4, 5, 6];
+    const nextGrades = currentGrades.includes(grade)
+      ? currentGrades
+      : [...currentGrades, grade].sort((a, b) => a - b);
 
-      const currentClasses: Record<number, number[]> = {
-        ...(prev.customClasses || {
-          3: [1, 2, 3, 4, 5],
-          4: [1, 2, 3, 4, 5, 6],
-          5: [1, 2, 3, 4, 5, 6],
-          6: [1, 2, 3, 4, 5, 6],
-        }),
-      };
-      if (!currentClasses[grade] || currentClasses[grade].length === 0) {
-        currentClasses[grade] = [1];
-      }
+    const currentClasses: Record<number, number[]> = {
+      ...(systemConfig.customClasses || {
+        3: [1, 2, 3, 4, 5],
+        4: [1, 2, 3, 4, 5, 6],
+        5: [1, 2, 3, 4, 5, 6],
+        6: [1, 2, 3, 4, 5, 6],
+      }),
+    };
+    if (!currentClasses[grade] || currentClasses[grade].length === 0) {
+      currentClasses[grade] = [1];
+    }
 
-      return {
-        ...prev,
-        customGrades: nextGrades,
-        customClasses: currentClasses,
-      };
-    });
+    const newConfig: SystemConfig = {
+      ...systemConfig,
+      customGrades: nextGrades,
+      customClasses: currentClasses,
+    };
+    setSystemConfig(newConfig);
 
-    // 2. Add consumable record for 1반
+    const newCons: ConsumableInventory = {
+      id: `cons-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      location: locName,
+      deviceType: 'mouse',
+      mouseWiredCount: 0,
+      mouseWirelessCount: 20,
+      earphoneCount: 20,
+      mouseSpareCount: 0,
+      earphoneSpareCount: 0,
+      requestMemo: '',
+      updatedAt: now,
+    };
     setConsumables((prev) => {
       if (prev.some((c) => c.location === locName)) return prev;
-      return [
-        ...prev,
-        {
-          id: `cons-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-          location: locName,
-          deviceType: 'mouse',
-          mouseWiredCount: 0,
-          mouseWirelessCount: 20,
-          earphoneCount: 20,
-          mouseSpareCount: 0,
-          earphoneSpareCount: 0,
-          requestMemo: '',
-          updatedAt: now,
-        },
-      ];
+      return [...prev, newCons];
     });
 
-    // 3. Auto-generate 1~20 Chromebooks for the new grade's 1반
     const newDevs: Device[] = [];
     for (let i = 1; i <= 20; i++) {
       newDevs.push({
@@ -706,7 +922,7 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         managementNumber: '',
         classDeviceNumber: i,
         deviceName: '삼성 갤럭시 크롬북',
-        modelName: 'Galaxy Chromebook 2 360',
+        modelName: '',
         manufacturer: '삼성전자',
         location: locName,
         grade,
@@ -719,48 +935,79 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
     }
     setDevices((prev) => [...prev, ...newDevs]);
+
+    try {
+      await setDoc(doc(db, 'systemConfig', 'main'), cleanForFirestore(newConfig), { merge: true });
+      await setDoc(doc(db, 'consumables', newCons.id), cleanForFirestore(newCons), { merge: true });
+      await batchWriteDevices(newDevs);
+    } catch (e) {
+      console.error('Firestore addGrade error:', e);
+    }
   };
 
-  const deleteGrade = (grade: number) => {
-    // 1. Remove devices in this grade
-    setDevices((prev) => prev.filter((d) => d.grade !== grade && !d.location.startsWith(`${grade}학년`)));
+  const deleteGrade = async (grade: number) => {
+    const devsToDelete = devices.filter((d) => d.grade === grade || d.location.startsWith(`${grade}학년`));
+    const consToDelete = consumables.filter((c) => c.location.startsWith(`${grade}학년`));
 
-    // 2. Remove consumables for this grade
+    setDevices((prev) => prev.filter((d) => d.grade !== grade && !d.location.startsWith(`${grade}학년`)));
     setConsumables((prev) => prev.filter((c) => !c.location.startsWith(`${grade}학년`)));
 
-    // 3. Update config
-    setSystemConfig((prev) => {
-      const currentGrades = prev.customGrades && prev.customGrades.length > 0
-        ? [...prev.customGrades]
-        : [3, 4, 5, 6];
-      const nextGrades = currentGrades.filter((g) => g !== grade);
-      const currentClasses: Record<number, number[]> = {
-        ...(prev.customClasses || {
-          3: [1, 2, 3, 4, 5],
-          4: [1, 2, 3, 4, 5, 6],
-          5: [1, 2, 3, 4, 5, 6],
-          6: [1, 2, 3, 4, 5, 6],
-        }),
-      };
-      delete currentClasses[grade];
+    const currentGrades = systemConfig.customGrades && systemConfig.customGrades.length > 0
+      ? [...systemConfig.customGrades]
+      : [3, 4, 5, 6];
+    const nextGrades = currentGrades.filter((g) => g !== grade);
+    const currentClasses: Record<number, number[]> = {
+      ...(systemConfig.customClasses || {
+        3: [1, 2, 3, 4, 5],
+        4: [1, 2, 3, 4, 5, 6],
+        5: [1, 2, 3, 4, 5, 6],
+        6: [1, 2, 3, 4, 5, 6],
+      }),
+    };
+    delete currentClasses[grade];
 
-      return {
-        ...prev,
-        customGrades: nextGrades,
-        customClasses: currentClasses,
-      };
-    });
+    const newConfig: SystemConfig = {
+      ...systemConfig,
+      customGrades: nextGrades,
+      customClasses: currentClasses,
+    };
+    setSystemConfig(newConfig);
+
+    try {
+      await setDoc(doc(db, 'systemConfig', 'main'), cleanForFirestore(newConfig), { merge: true });
+      for (const d of devsToDelete) {
+        await deleteDoc(doc(db, 'devices', d.id));
+      }
+      for (const c of consToDelete) {
+        await deleteDoc(doc(db, 'consumables', c.id));
+      }
+    } catch (e) {
+      console.error('Firestore deleteGrade error:', e);
+    }
   };
 
-  const resetToDefaultData = () => {
+  const resetToDefaultData = async () => {
     const defaultDevs = generateInitialDevices();
     const defaultCons = generateInitialConsumables();
     setDevices(defaultDevs);
     setConsumables(defaultCons);
     setSystemConfig(INITIAL_SYSTEM_CONFIG);
+
     localStorage.setItem(STORAGE_KEYS.DEVICES, JSON.stringify(defaultDevs));
     localStorage.setItem(STORAGE_KEYS.CONSUMABLES, JSON.stringify(defaultCons));
     localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(INITIAL_SYSTEM_CONFIG));
+
+    try {
+      setSyncStatus('syncing');
+      await setDoc(doc(db, 'systemConfig', 'main'), cleanForFirestore(INITIAL_SYSTEM_CONFIG));
+      await batchWriteDevices(defaultDevs);
+      await batchWriteConsumables(defaultCons);
+      setSyncStatus('synced');
+      setLastSyncedAt(new Date());
+    } catch (e) {
+      console.error('Firestore reset error:', e);
+      setSyncStatus('error');
+    }
   };
 
   const exportDataToJson = () => {
@@ -776,18 +1023,22 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     );
   };
 
-  const importDataFromJson = (jsonStr: string): boolean => {
+  const importDataFromJson = async (jsonStr: string): Promise<boolean> => {
     try {
       const data = JSON.parse(jsonStr);
       if (Array.isArray(data.devices)) {
         setDevices(data.devices);
+        await batchWriteDevices(data.devices);
       }
       if (Array.isArray(data.consumables)) {
         setConsumables(data.consumables);
+        await batchWriteConsumables(data.consumables);
       }
       if (data.systemConfig) {
         setSystemConfig(data.systemConfig);
+        await setDoc(doc(db, 'systemConfig', 'main'), cleanForFirestore(data.systemConfig));
       }
+      setLastSyncedAt(new Date());
       return true;
     } catch (e) {
       console.error('Import failed', e);
@@ -802,6 +1053,9 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         consumables,
         systemConfig,
         stats,
+        syncStatus,
+        isOnline,
+        lastSyncedAt,
         addDevice,
         batchAddDevices,
         updateDevice,
@@ -818,6 +1072,7 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         resetToDefaultData,
         exportDataToJson,
         importDataFromJson,
+        syncDataNow,
       }}
     >
       {children}

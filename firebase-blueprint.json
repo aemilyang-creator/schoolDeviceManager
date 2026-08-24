@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "devices": {
+      "title": "Device",
+      "description": "School chromebooks, mice, and peripherals",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "deviceType": { "type": "string", "enum": ["chromebook", "mouse", "earphone"] },
+        "managementNumber": { "type": "string" },
+        "classDeviceNumber": { "type": "number" },
+        "deviceName": { "type": "string" },
+        "modelName": { "type": "string" },
+        "manufacturer": { "type": "string" },
+        "location": { "type": "string" },
+        "grade": { "type": "number" },
+        "classNum": { "type": "number" },
+        "status": { "type": "string", "enum": ["normal", "repair", "broken"] },
+        "issueDescription": { "type": "string" },
+        "repairDescription": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "note": { "type": "string" }
+      },
+      "required": ["id", "deviceType", "deviceName", "location", "status"]
+    },
+    "consumables": {
+      "title": "ConsumableInventory",
+      "description": "Consumable inventory and requests per class",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "location": { "type": "string" },
+        "deviceType": { "type": "string" },
+        "mouseWiredCount": { "type": "number" },
+        "mouseWirelessCount": { "type": "number" },
+        "earphoneCount": { "type": "number" },
+        "mouseSpareCount": { "type": "number" },
+        "earphoneSpareCount": { "type": "number" },
+        "requestMemo": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "location"]
+    },
+    "systemConfig": {
+      "title": "SystemConfig",
+      "description": "School and academic configuration",
+      "type": "object",
+      "properties": {
+        "schoolName": { "type": "string" },
+        "systemName": { "type": "string" },
+        "academicYear": { "type": "string" },
+        "digitalTutorName": { "type": "string" },
+        "deviceTeacherName": { "type": "string" },
+        "userRole": { "type": "string" }
+      },
+      "required": ["schoolName", "systemName"]
+    }
+  }
+}

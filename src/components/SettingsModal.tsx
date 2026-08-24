@@ -11,7 +11,11 @@ import {
   Save, 
   HelpCircle,
   Terminal,
-  Code2
+  Code2,
+  Cloud,
+  Globe,
+  RefreshCw,
+  Server
 } from 'lucide-react';
 import { useDevices } from '../context/DeviceContext';
 
@@ -21,21 +25,32 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
-  const { systemConfig, updateSystemConfig, exportDataToJson, importDataFromJson, resetToDefaultData } = useDevices();
+  const {
+    systemConfig,
+    updateSystemConfig,
+    exportDataToJson,
+    importDataFromJson,
+    resetToDefaultData,
+    syncStatus,
+    isOnline,
+    lastSyncedAt,
+    syncDataNow
+  } = useDevices();
 
   const [schoolName, setSchoolName] = useState(systemConfig.schoolName);
   const [academicYear, setAcademicYear] = useState(systemConfig.academicYear);
   const [digitalTutorName, setDigitalTutorName] = useState(systemConfig.digitalTutorName);
   const [deviceTeacherName, setDeviceTeacherName] = useState(systemConfig.deviceTeacherName);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
-  const handleSaveConfig = (e: React.FormEvent) => {
+  const handleSaveConfig = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateSystemConfig({
+    await updateSystemConfig({
       schoolName,
       academicYear,
       digitalTutorName,
@@ -43,6 +58,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
     });
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2000);
+  };
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    await syncDataNow();
+    setTimeout(() => setIsSyncing(false), 700);
   };
 
   const handleExportJSON = () => {
@@ -178,7 +199,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             </div>
           </form>
 
-          {/* Section 2: Data Backup & Restore */}
+          {/* Section 2: Online Cloud Database Status */}
+          <div className="space-y-3 pt-3 border-t border-slate-100 bg-purple-50/60 p-5 rounded-2xl border border-purple-200/70">
+            <div className="flex items-center justify-between">
+              <h4 className="font-black text-purple-950 text-sm flex items-center gap-2">
+                <Cloud className="w-4 h-4 text-purple-900" />
+                <span>온라인 클라우드 데이터베이스 (Firebase Firestore)</span>
+              </h4>
+              <button
+                type="button"
+                onClick={handleManualSync}
+                className="px-3 py-1.5 bg-white hover:bg-purple-100 text-purple-900 border border-purple-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                <span>{isSyncing ? '동기화 중...' : '지금 즉시 동기화'}</span>
+              </button>
+            </div>
+
+            <p className="text-slate-600 text-xs font-medium leading-relaxed">
+              모든 컴퓨터, 태블릿, 브라우저에서 동일한 기기 현황 및 수리 이력이 <strong>실시간으로 자동 동기화</strong>됩니다. 수정한 내용은 중앙 클라우드 DB에 즉시 보관됩니다.
+            </p>
+
+            <div className="flex items-center gap-3 text-[11px] font-bold text-purple-900">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                <span>상태: {syncStatus === 'synced' ? '정상 연결됨 (실시간)' : syncStatus}</span>
+              </div>
+              <span>·</span>
+              <div>
+                <span>최근 동기화: {lastSyncedAt ? lastSyncedAt.toLocaleTimeString('ko-KR') : '방금 전'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Data Backup & Restore */}
           <div className="space-y-3 pt-3 border-t border-slate-100">
             <h4 className="font-black text-slate-900 text-sm flex items-center gap-2 pb-1.5 border-b border-slate-100">
               <Download className="w-4 h-4 text-purple-900" />
@@ -217,28 +271,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
             </div>
           </div>
 
-          {/* Section 3: VS Code Local Execution Guide */}
-          <div className="space-y-2.5 pt-3 border-t border-slate-100 bg-slate-50 p-5 rounded-2xl border border-slate-200">
-            <h4 className="font-black text-slate-950 text-xs flex items-center gap-2">
-              <Code2 className="w-4 h-4 text-purple-900" />
-              <span>Visual Studio Code에서 실행하는 방법</span>
-            </h4>
+          {/* Section 4: VS Code, GitHub & Vercel Deployment Guide */}
+          <div className="space-y-3 pt-3 border-t border-slate-100 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+            <div className="flex items-center justify-between">
+              <h4 className="font-black text-slate-950 text-xs flex items-center gap-2">
+                <Globe className="w-4 h-4 text-purple-900" />
+                <span>GitHub 연동 및 Vercel 배포 가이드</span>
+              </h4>
+              <span className="text-[10px] bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full font-bold">배포 및 공유 지원</span>
+            </div>
+
             <p className="text-slate-600 text-[11px] leading-relaxed font-medium">
-              이 프로젝트를 VS Code에서 다운로드하여 단독 실행할 때 아래 명령어를 터미널에 입력하세요:
+              이 코드를 <strong>Visual Studio Code</strong>에서 열어 <strong>GitHub 저장소</strong>에 올리고 <strong>Vercel</strong>에서 배포하면, 교내 모든 컴퓨터에서 접속 가능한 고유 URL이 생성되며 동일한 Firebase DB 데이터를 함께 실시간으로 보실 수 있습니다.
             </p>
-            <div className="bg-slate-950 text-slate-100 p-3.5 rounded-xl font-mono text-[11px] space-y-1.5 select-all border border-slate-800">
-              <div className="text-purple-300 font-bold"># 1. 패키지 의존성 설치</div>
+
+            <div className="bg-slate-950 text-slate-100 p-4 rounded-xl font-mono text-[11px] space-y-2 select-all border border-slate-800">
+              <div className="text-purple-300 font-bold"># 1. VS Code에서 패키지 설치 및 로컬 테스트</div>
               <div className="text-emerald-400 font-bold">npm install</div>
-              <div className="text-purple-300 font-bold pt-1"># 2. 로컬 개발 서버 실행 (포트 3000)</div>
               <div className="text-emerald-400 font-bold">npm run dev</div>
+              
+              <div className="text-purple-300 font-bold pt-1.5"># 2. GitHub에 푸시 후 Vercel 연결</div>
+              <div className="text-slate-300 font-normal">
+                1) GitHub 저장소에 코드를 Commit & Push합니다.<br />
+                2) vercel.com 에 로그인 후 "Add New Project" &gt; GitHub 저장소를 선택합니다.<br />
+                3) Framework: "Vite" 자동 인식 &gt; "Deploy" 버튼을 누르면 끝!
+              </div>
             </div>
           </div>
 
-          {/* Section 4: Factory Reset */}
+          {/* Section 5: Factory Reset */}
           <div className="space-y-2 pt-2 border-t border-slate-100 flex items-center justify-between">
             <div>
               <div className="font-black text-rose-700">데이터 초기화</div>
-              <div className="text-[11px] text-slate-500 font-medium">제주이도초등학교 기본 샘플 데이터로 복구</div>
+              <div className="text-[11px] text-slate-500 font-medium">제주초등학교 기본 데이터로 복구</div>
             </div>
             <button
               type="button"

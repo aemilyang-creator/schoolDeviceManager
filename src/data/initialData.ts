@@ -93,8 +93,8 @@ export function generateInitialDevices(): Device[] {
       const locationKey = `${targetClass.name}-${num}`;
 
       let status: 'normal' | 'repair' | 'broken' = 'normal';
-      let issueDesc: string | undefined;
-      let repairDesc: string | undefined;
+      let issueDesc = '';
+      let repairDesc = '';
 
       if (locationKey === repairTargetKey) {
         status = 'repair';
@@ -151,8 +151,8 @@ export function generateInitialDevices(): Device[] {
       const locationKey = `${room}-${num}`;
 
       let status: 'normal' | 'repair' | 'broken' = 'normal';
-      let issueDesc: string | undefined;
-      let repairDesc: string | undefined;
+      let issueDesc = '';
+      let repairDesc = '';
 
       if (brokenTargetMap[locationKey] !== undefined) {
         status = 'broken';

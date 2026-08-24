@@ -105,7 +105,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {/* 2. MAIN BOLD HERO GRID */}
       <div className="grid grid-cols-12 gap-6">
         {/* BIG HERO CARD: 8 COLS */}
-        <div className="col-span-12 lg:col-span-8 bg-gradient-to-br from-purple-400 to-purple-500 rounded-3xl p-6 sm:p-8 text-white flex flex-col justify-between shadow-lg shadow-purple-100 border border-purple-300/30">
+        <div className="col-span-12 lg:col-span-8 bg-gradient-to-br from-purple-800 to-purple-900 rounded-3xl p-6 sm:p-8 text-white flex flex-col justify-between shadow-lg shadow-purple-950/20 border border-purple-700/50">
           <div>
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <h3 className="text-base sm:text-lg font-bold opacity-95 tracking-wide">
@@ -136,7 +136,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-purple-100">
                   <div className="flex items-center gap-1.5">
                     <FileText className="w-3.5 h-3.5 text-purple-950" />
-                    <span className="text-xs font-black tracking-tight text-purple-950">학급별 소모품 요청 및 건의</span>
+                    <span className="text-xs font-black tracking-tight text-purple-950">학급별 요청·점검 관리 메모</span>
                   </div>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-950 text-white shadow-2xs">
                     {requestedConsumables.length}건
@@ -147,7 +147,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <div className="max-h-28 sm:max-h-32 overflow-y-auto space-y-1.5 pr-1 custom-memo-scroll text-xs">
                   {requestedConsumables.length === 0 ? (
                     <div className="py-3 text-center text-purple-900/60">
-                      <p className="text-xs font-medium">등록된 소모품 요청 및 건의사항이 없습니다.</p>
+                      <p className="text-xs font-medium">등록된 요청 및 점검 관리 메모가 없습니다.</p>
                     </div>
                   ) : (
                     requestedConsumables.map((item) => (
@@ -199,7 +199,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </div>
               <button
                 onClick={() => onNavigateTab('classes')}
-                className="bg-white text-purple-700 hover:bg-purple-50 px-4 py-2 rounded-full text-xs font-bold transition-transform active:scale-95 shadow-sm flex items-center gap-1"
+                className="bg-white text-purple-900 hover:bg-purple-50 px-4 py-2 rounded-full text-xs font-bold transition-transform active:scale-95 shadow-sm flex items-center gap-1"
               >
                 <span>학급별 보기</span>
                 <ChevronRight className="w-3.5 h-3.5" />
