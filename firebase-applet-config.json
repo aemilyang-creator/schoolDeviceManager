@@ -1,11 +1,11 @@
 {
-  "projectId": "YOUR_FIREBASE_PROJECT_ID",
-  "appId": "YOUR_FIREBASE_APP_ID",
-  "apiKey": "YOUR_FIREBASE_API_KEY",
-  "authDomain": "YOUR_FIREBASE_AUTH_DOMAIN",
-  "firestoreDatabaseId": "YOUR_FIREBASE_DATABASE_ID",
-  "storageBucket": "YOUR_FIREBASE_STORAGE_BUCKET",
-  "messagingSenderId": "YOUR_FIREBASE_MESSAGING_SENDER_ID",
+  "projectId": "ai-studio-applet-webapp-b2e6f",
+  "appId": "1:438250245621:web:a2d1a165124030538ba4bc",
+  "apiKey": "AIzaSyDx0Hic6YZE_TeFro-Vm5Nx7WXT2G1JnAM",
+  "authDomain": "ai-studio-applet-webapp-b2e6f.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-d3dcadda-45c0-4936-a1b8-66d0531c6ec5",
+  "storageBucket": "ai-studio-applet-webapp-b2e6f.firebasestorage.app",
+  "messagingSenderId": "438250245621",
   "measurementId": "",
   "oAuthClientId": "438250245621-9e22l41ppfattpnrj2u44imgv7j13dc9.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
