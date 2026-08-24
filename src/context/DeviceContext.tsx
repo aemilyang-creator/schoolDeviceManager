@@ -125,6 +125,27 @@ async function batchWriteConsumables(consList: ConsumableInventory[]) {
   await batch.commit();
 }
 
+// Helper to sanitize device naming across all models (e.g. normalize Samsung Chromebook)
+const normalizeDevice = (d: Device): Device => {
+  let devName = d.deviceName || '';
+  let mfr = d.manufacturer || '';
+  if (
+    devName.includes('갤럭시') ||
+    devName.includes('Galaxy') ||
+    devName === '삼성전자갤럭시크롬북' ||
+    devName === '삼성 갤럭시 크롬북' ||
+    mfr.includes('갤럭시')
+  ) {
+    devName = '삼성전자 크롬북';
+    mfr = '삼성전자';
+  }
+  return {
+    ...d,
+    deviceName: devName,
+    manufacturer: mfr,
+  };
+};
+
 export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Sync state
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('syncing');
@@ -138,7 +159,7 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.map(normalizeDevice);
         }
       }
     } catch (e) {
@@ -153,7 +174,7 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (saved) {
         const parsed: ConsumableInventory[] = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.filter((c) => !c.location.includes('보관실') && c.location !== '소모품 보관실');
         }
       }
     } catch (e) {
@@ -264,7 +285,8 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             } else {
               const remoteDevices: Device[] = [];
               snapshot.forEach((docSnap) => {
-                remoteDevices.push(docSnap.data() as Device);
+                const data = docSnap.data() as Device;
+                remoteDevices.push(normalizeDevice(data));
               });
               setDevices(remoteDevices);
             }
@@ -295,7 +317,12 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             } else {
               const remoteCons: ConsumableInventory[] = [];
               snapshot.forEach((docSnap) => {
-                remoteCons.push(docSnap.data() as ConsumableInventory);
+                const data = docSnap.data() as ConsumableInventory;
+                if (data.location && (data.location.includes('보관실') || data.location === '소모품 보관실')) {
+                  deleteDoc(docSnap.ref).catch((err) => console.error('Error deleting obsolete storage room consumable doc:', err));
+                } else {
+                  remoteCons.push(data);
+                }
               });
               setConsumables(remoteCons);
             }
@@ -375,16 +402,28 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (d.status === 'broken') mfrMap[mfr].broken++;
     });
 
-    const mouseWired = consumables.reduce((acc, c) => acc + (c.mouseWiredCount || 0), 0);
-    const mouseWireless = consumables.reduce((acc, c) => acc + (c.mouseWirelessCount || 0), 0);
-    const mouseSpare = consumables.reduce((acc, c) => acc + (c.mouseSpareCount || 0), 0);
-    const mouseTotal = mouseWired + mouseWireless + mouseSpare;
+    // Consumables (Classroom assigned vs Smart Room spare)
+    const classroomConsumables = consumables.filter(
+      (c) => !c.location.includes('스마트실') && !c.location.includes('스마트') && !c.location.includes('보관실')
+    );
+    const smartRoomConsumable = consumables.find(
+      (c) => c.location.includes('스마트실') || c.location.includes('스마트')
+    );
 
-    const earphoneAssigned = consumables.reduce((acc, c) => acc + (c.earphoneCount || 0), 0);
-    const earphoneSpare = consumables.reduce((acc, c) => acc + (c.earphoneSpareCount || 0), 0);
-    const earphoneTotal = earphoneAssigned + earphoneSpare;
+    const mouseAssignedWired = classroomConsumables.reduce((acc, c) => acc + (c.mouseWiredCount || 0), 0);
+    const mouseAssignedWireless = classroomConsumables.reduce((acc, c) => acc + (c.mouseWirelessCount || 0), 0);
+    const mouseAssignedTotal = mouseAssignedWired + mouseAssignedWireless; // 각반 배부 수만 총 합산
 
-    const totalAll = cbTotal + mouseTotal + earphoneTotal;
+    const smartMiceWired = smartRoomConsumable ? (smartRoomConsumable.mouseWiredCount || 0) : 0;
+    const smartMiceWireless = smartRoomConsumable ? (smartRoomConsumable.mouseWirelessCount || 0) : 0;
+    const mouseSpare = smartMiceWired + smartMiceWireless;
+    const mouseTotalWithSpare = mouseAssignedTotal + mouseSpare;
+
+    const earphoneAssigned = classroomConsumables.reduce((acc, c) => acc + (c.earphoneCount || 0), 0); // 각반 배부 수만 총 합산
+    const earphoneSpare = smartRoomConsumable ? (smartRoomConsumable.earphoneCount || 0) : 0;
+    const earphoneTotalWithSpare = earphoneAssigned + earphoneSpare;
+
+    const totalAll = cbTotal + mouseAssignedTotal + earphoneAssigned;
     const operationalRate = cbTotal > 0 ? (cbNormal / cbTotal) * 100 : 0;
 
     return {
@@ -397,13 +436,18 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         byManufacturer: mfrMap,
       },
       mouse: {
-        total: mouseTotal,
-        wired: mouseWired,
-        wireless: mouseWireless,
+        total: mouseAssignedTotal, // 각반 배부 수 총합
+        totalWithSpare: mouseTotalWithSpare,
+        assigned: mouseAssignedTotal,
+        assignedWired: mouseAssignedWired,
+        assignedWireless: mouseAssignedWireless,
+        wired: mouseAssignedWired,
+        wireless: mouseAssignedWireless,
         spare: mouseSpare,
       },
       earphone: {
-        total: earphoneTotal,
+        total: earphoneAssigned, // 각반 배부 수 총합
+        totalWithSpare: earphoneTotalWithSpare,
         assigned: earphoneAssigned,
         spare: earphoneSpare,
       },
@@ -424,7 +468,10 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const consDocs = await getDocs(collection(db, 'consumables'));
       
       const remoteDevices: Device[] = [];
-      devDocs.forEach((d) => remoteDevices.push(d.data() as Device));
+      devDocs.forEach((d) => {
+        const data = d.data() as Device;
+        remoteDevices.push(normalizeDevice(data));
+      });
       
       const remoteCons: ConsumableInventory[] = [];
       consDocs.forEach((c) => remoteCons.push(c.data() as ConsumableInventory));

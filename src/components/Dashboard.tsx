@@ -44,9 +44,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const repairDevices = devices.filter((d) => d.status === 'repair');
   const requestedConsumables = consumables.filter((c) => c.requestMemo && c.requestMemo.trim() !== '');
 
-  // Quick adjust total consumables via storage room
+  // Quick adjust total consumables via smart room
   const handleQuickAdjust = (type: 'mouse' | 'earphone', delta: number) => {
-    const storage = consumables.find(c => c.location.includes('보관실')) || consumables[0];
+    const storage = consumables.find(c => c.location.includes('스마트')) || consumables[0];
     if (storage) {
       if (type === 'mouse') {
         const nextVal = Math.max(0, storage.mouseWirelessCount + delta);
@@ -215,7 +215,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div className="flex justify-between items-start">
               <div>
                 <h4 className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider">
-                  마우스 현황
+                  마우스 배부 현황
                 </h4>
                 <p className="text-3xl sm:text-4xl font-black text-slate-800 mt-1 tracking-tight">
                   {stats.mouse.total.toLocaleString()}
@@ -225,14 +225,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div className="flex gap-1.5">
                 <button
                   onClick={() => handleQuickAdjust('mouse', -1)}
-                  title="수량 1 감소"
+                  title="스마트실 수량 1 감소"
                   className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 font-bold transition-colors cursor-pointer"
                 >
                   -
                 </button>
                 <button
                   onClick={() => handleQuickAdjust('mouse', 1)}
-                  title="수량 1 증가"
+                  title="스마트실 수량 1 증가"
                   className="w-8 h-8 rounded-lg bg-purple-50 hover:bg-purple-100 flex items-center justify-center text-purple-600 font-bold transition-colors cursor-pointer"
                 >
                   +
@@ -240,7 +240,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </div>
             </div>
             <div className="flex justify-between text-xs border-t border-slate-50 pt-4 font-medium">
-              <span className="text-slate-500">유선 {stats.mouse.wired} / 무선 {stats.mouse.wireless}</span>
+              <span className="text-slate-500">유선 {stats.mouse.assignedWired || stats.mouse.wired} / 무선 {stats.mouse.assignedWireless || stats.mouse.wireless}</span>
               <span className={stats.mouse.spare === 0 ? "text-rose-500 font-bold" : "text-emerald-600 font-bold"}>
                 예비 {stats.mouse.spare}
               </span>
@@ -252,7 +252,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div className="flex justify-between items-start">
               <div>
                 <h4 className="text-xs sm:text-sm font-bold text-slate-400 uppercase tracking-wider">
-                  이어폰 현황
+                  이어폰 배부 현황
                 </h4>
                 <p className="text-3xl sm:text-4xl font-black text-slate-800 mt-1 tracking-tight">
                   {stats.earphone.total.toLocaleString()}
@@ -262,14 +262,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div className="flex gap-1.5">
                 <button
                   onClick={() => handleQuickAdjust('earphone', -1)}
-                  title="수량 1 감소"
+                  title="스마트실 수량 1 감소"
                   className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 font-bold transition-colors cursor-pointer"
                 >
                   -
                 </button>
                 <button
                   onClick={() => handleQuickAdjust('earphone', 1)}
-                  title="수량 1 증가"
+                  title="스마트실 수량 1 증가"
                   className="w-8 h-8 rounded-lg bg-purple-50 hover:bg-purple-100 flex items-center justify-center text-purple-600 font-bold transition-colors cursor-pointer"
                 >
                   +
@@ -277,7 +277,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </div>
             </div>
             <div className="flex justify-between text-xs border-t border-slate-50 pt-4 font-medium">
-              <span className="text-slate-500">전량 지급 완료 ({stats.earphone.assigned}개)</span>
+              <span className="text-slate-500">학급 배부 완료 ({stats.earphone.assigned}개)</span>
               <span className={stats.earphone.spare === 0 ? "text-rose-500 font-bold" : "text-emerald-600 font-bold"}>
                 예비 {stats.earphone.spare}
               </span>
@@ -371,7 +371,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <th className="pb-2">장소</th>
                     <th className="pb-2">상태</th>
                     <th className="pb-2">내용</th>
-                    <th className="pb-2 text-right">빠른 조치</th>
                   </tr>
                 </thead>
                 <tbody className="text-xs divide-y divide-slate-50">
@@ -400,25 +399,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             {isBroken ? '고장' : '수리 중'}
                           </span>
                         </td>
-                        <td className="py-3 text-slate-500 max-w-[180px] truncate">
+                        <td className="py-3 text-slate-500 max-w-[240px] truncate">
                           {device.issueDescription || device.repairDescription || '-'}
-                        </td>
-                        <td className="py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                          {isBroken ? (
-                            <button
-                              onClick={() => onQuickStatusChange(device, 'repair')}
-                              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded text-[11px] font-bold shadow-xs transition-transform active:scale-95"
-                            >
-                              수리 접수
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => onQuickStatusChange(device, 'normal')}
-                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold shadow-xs transition-transform active:scale-95"
-                            >
-                              수리 완료
-                            </button>
-                          )}
                         </td>
                       </tr>
                     );
@@ -463,16 +445,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
 
         <div
-          onClick={onOpenRegisterModal}
+          onClick={() => onNavigateTab('devices')}
           className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm hover:shadow-md cursor-pointer transition-all hover:translate-y-[-2px] group"
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">신규 기기 등록</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">전체 기기 관리</span>
             <ArrowUpRight className="w-4 h-4 text-slate-300 group-hover:text-purple-500 transition-colors" />
           </div>
-          <div className="text-2xl font-black text-slate-900 font-mono">+ 개별/일괄</div>
+          <div className="text-2xl font-black text-slate-900 font-mono">{stats.chromebook.total}대 기기</div>
           <div className="text-xs text-purple-500 font-bold mt-1 flex items-center">
-            <span>등록 폼 열기</span>
+            <span>목록 조회 및 필터</span>
             <ChevronRight className="w-3 h-3 ml-0.5" />
           </div>
         </div>

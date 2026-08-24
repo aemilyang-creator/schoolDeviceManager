@@ -584,8 +584,8 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
                   <Laptop className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-[10px] font-bold text-purple-700 uppercase tracking-widest">Chromebooks</div>
-                  <h3 className="font-black text-slate-900 text-base">크롬북 배정 현황</h3>
+                  <div className="text-[10px] font-bold text-purple-700">크롬북 배정 현황</div>
+                  <h3 className="font-black text-slate-900 text-base">크롬북 현황</h3>
                 </div>
               </div>
               <span className="text-3xl font-black text-slate-900">
@@ -625,8 +625,7 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
                 <Mouse className="w-5 h-5" />
               </div>
               <div>
-                <div className="text-[10px] font-bold text-purple-700 uppercase tracking-widest">Mice Allocation</div>
-                <h3 className="font-black text-slate-900 text-base">마우스 수량 조정</h3>
+                <h3 className="font-black text-slate-900 text-base">마우스 수량</h3>
               </div>
             </div>
             <span className="text-3xl font-black text-slate-900">
@@ -700,7 +699,6 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
                 <Headphones className="w-5 h-5" />
               </div>
               <div>
-                <div className="text-[10px] font-bold text-purple-700 uppercase tracking-widest">Earphones & Notes</div>
                 <h3 className="font-black text-slate-900 text-base">이어폰 및 요청 메모</h3>
               </div>
             </div>
@@ -899,13 +897,13 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
                       )}
                     </button>
                   </th>
-                  <th className="py-3 px-4 w-24">반 번호</th>
-                  <th className="py-3 px-4">관리번호</th>
-                  <th className="py-3 px-4">기기 종류</th>
-                  <th className="py-3 px-4">기기명 / 제조사 모델</th>
-                  <th className="py-3 px-4">상태</th>
-                  <th className="py-3 px-4">고장 내용 / 점검 비고</th>
-                  <th className="py-3 px-4 text-right">상세 및 관리</th>
+                  <th className="py-3 px-3 w-20 text-center whitespace-nowrap">반 번호</th>
+                  <th className="py-3 px-3 whitespace-nowrap min-w-[130px]">관리번호</th>
+                  <th className="py-3 px-3 whitespace-nowrap min-w-[80px]">기기종류</th>
+                  <th className="py-3 px-3 whitespace-nowrap min-w-[130px]">기기명</th>
+                  <th className="py-3 px-3 whitespace-nowrap min-w-[90px]">상태</th>
+                  <th className="py-3 px-3 min-w-[180px]">고장/수리내용</th>
+                  <th className="py-3 px-3 text-right whitespace-nowrap w-24">상세</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -924,7 +922,7 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
                     >
                       {/* Checkbox column */}
                       <td 
-                        className="py-3.5 px-3 text-center" 
+                        className="py-3 px-3 text-center" 
                         onClick={(e) => {
                           e.stopPropagation();
                           handleToggleSelectDevice(device.id);
@@ -940,14 +938,14 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
                       </td>
 
                       {/* 1. 반 번호 Column (Primary Class Identifier) */}
-                      <td className="py-3.5 px-4 font-black text-purple-950 text-sm">
-                        <span className="inline-flex items-center justify-center min-w-[38px] px-2.5 py-1 rounded-xl bg-purple-100 text-purple-950 border border-purple-200/80 font-black text-xs">
+                      <td className="py-3 px-3 text-center whitespace-nowrap font-black text-purple-950 text-sm">
+                        <span className="inline-flex items-center justify-center min-w-[38px] px-2 py-0.5 rounded-xl bg-purple-100 text-purple-950 border border-purple-200/80 font-black text-xs">
                           {displayClassNum}
                         </span>
                       </td>
 
                       {/* 2. 관리번호 Column (Editable asset number, initially blank) */}
-                      <td className="py-3.5 px-4 text-xs font-mono" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3 px-3 text-xs font-mono whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         {editingMgmtId === device.id ? (
                           <div className="flex items-center space-x-1.5">
                             <input
@@ -981,12 +979,12 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
                             title="클릭하여 자산 관리번호 입력/수정"
                           >
                             {device.managementNumber ? (
-                              <span className="px-2.5 py-1 rounded-lg bg-slate-100 group-hover/mgmt:bg-purple-100 text-slate-800 group-hover/mgmt:text-purple-950 border border-slate-200 font-mono font-bold transition-colors inline-flex items-center gap-1.5">
+                              <span className="px-2.5 py-1 rounded-lg bg-slate-100 group-hover/mgmt:bg-purple-100 text-slate-800 group-hover/mgmt:text-purple-950 border border-slate-200 font-mono font-bold transition-colors inline-flex items-center gap-1.5 whitespace-nowrap">
                                 {device.managementNumber}
                                 <Edit3 className="w-3 h-3 text-slate-400 group-hover/mgmt:text-purple-700 opacity-60 group-hover/mgmt:opacity-100" />
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 rounded-lg bg-slate-50 hover:bg-purple-50 text-slate-400 hover:text-purple-700 border border-dashed border-slate-300 hover:border-purple-400 font-medium text-[11px] inline-flex items-center gap-1 transition-colors">
+                              <span className="px-2 py-0.5 rounded-lg bg-slate-50 hover:bg-purple-50 text-slate-400 hover:text-purple-700 border border-dashed border-slate-300 hover:border-purple-400 font-medium text-[11px] inline-flex items-center gap-1 transition-colors whitespace-nowrap">
                                 <Plus className="w-3 h-3" />
                                 <span>관리번호 입력</span>
                               </span>
@@ -996,23 +994,23 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
                       </td>
 
                       {/* Device Type */}
-                      <td className="py-3.5 px-4">
-                        <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 font-bold text-[11px]">
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 font-bold text-[11px] whitespace-nowrap inline-block">
                           {device.deviceType === 'chromebook' ? '크롬북' : device.deviceType === 'mouse' ? '마우스' : '이어폰'}
                         </span>
                       </td>
 
                       {/* Device Name */}
-                      <td className="py-3.5 px-4 text-slate-900 font-bold">
-                        <div>{device.deviceName}</div>
+                      <td className="py-3 px-3 text-slate-900 font-bold whitespace-nowrap">
+                        <span className="whitespace-nowrap block">{device.deviceName}</span>
                       </td>
 
                       {/* Status Button for modal status & issue reason */}
-                      <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3 px-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           onClick={() => handleOpenStatusModal(device)}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black border transition-all hover:scale-105 hover:shadow-xs active:scale-95 cursor-pointer font-sans ${badge.bg}`}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black border transition-all hover:scale-105 hover:shadow-xs active:scale-95 cursor-pointer font-sans whitespace-nowrap ${badge.bg}`}
                           title="클릭하여 상태 및 고장원인/수리내용 작성"
                         >
                           <span className={`w-2 h-2 rounded-full ${badge.dot}`} />
@@ -1021,11 +1019,11 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
                       </td>
 
                       {/* Issues / Repair Notes (Next to Status) */}
-                      <td className="py-3.5 px-4 text-xs font-medium">
+                      <td className="py-3 px-3 text-xs font-medium">
                         {device.status === 'broken' ? (
                           <div 
                             onClick={() => handleOpenStatusModal(device)}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 font-bold border border-rose-200 cursor-pointer hover:bg-rose-100 transition-colors max-w-xs"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 font-bold border border-rose-200 cursor-pointer hover:bg-rose-100 transition-colors max-w-sm"
                             title="클릭하여 고장 원인 수정"
                           >
                             <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
@@ -1034,25 +1032,25 @@ export const ClassroomView: React.FC<ClassroomViewProps> = ({ onSelectDevice, on
                         ) : device.status === 'repair' ? (
                           <div 
                             onClick={() => handleOpenStatusModal(device)}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-bold border border-amber-200 cursor-pointer hover:bg-amber-100 transition-colors max-w-xs"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-bold border border-amber-200 cursor-pointer hover:bg-amber-100 transition-colors max-w-sm"
                             title="클릭하여 수리 내용 수정"
                           >
                             <Wrench className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                             <span className="truncate">{device.repairDescription || device.issueDescription || '수리 진행 중 (클릭하여 입력)'}</span>
                           </div>
                         ) : device.note ? (
-                          <span className="text-slate-500">{device.note}</span>
+                          <span className="text-slate-500 truncate block max-w-xs">{device.note}</span>
                         ) : (
                           <span className="text-slate-400">-</span>
                         )}
                       </td>
 
                       {/* Actions: View Details, Delete */}
-                      <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end space-x-2">
+                      <td className="py-3 px-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end space-x-1.5">
                           <button
                             onClick={() => onSelectDevice(device)}
-                            className="px-3 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold transition-colors"
+                            className="px-2.5 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold transition-colors whitespace-nowrap"
                           >
                             상세
                           </button>

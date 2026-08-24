@@ -71,9 +71,9 @@ export const DeviceRegisterModal: React.FC<DeviceRegisterModalProps> = ({
   const handleDeviceTypeChange = (type: DeviceType) => {
     setDeviceType(type);
     if (type === 'chromebook') {
-      setDeviceName('삼성 갤럭시 크롬북');
+      setDeviceName('삼성전자 크롬북');
       setManufacturer('삼성전자');
-      setModelName('Galaxy Chromebook 2 360');
+      setModelName('');
       setBatchPrefix('CB-2026-');
     } else if (type === 'mouse') {
       setDeviceName('무선 광마우스');

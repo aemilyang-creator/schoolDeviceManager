@@ -87,7 +87,7 @@ ${requestedConsumables.map((c) => ` • [${c.location}] ${c.requestMemo}`).join(
               <FileText className="w-5 h-5 text-purple-200" />
             </div>
             <div>
-              <div className="text-[10px] font-bold text-purple-300 uppercase tracking-widest">Official Report</div>
+              <div className="text-[10px] font-bold text-purple-300">공식 보고서</div>
               <h3 className="font-black text-lg text-white tracking-tight">디지털기기 담당 교사 보고서</h3>
             </div>
           </div>
@@ -255,7 +255,7 @@ ${requestedConsumables.map((c) => ` • [${c.location}] ${c.requestMemo}`).join(
                   <tr>
                     <th className="p-2.5">관리번호</th>
                     <th className="p-2.5">보관장소</th>
-                    <th className="p-2.5">기기명/제조사</th>
+                    <th className="p-2.5">기기명</th>
                     <th className="p-2.5">상태</th>
                     <th className="p-2.5">고장 증상 및 조치 계획</th>
                   </tr>

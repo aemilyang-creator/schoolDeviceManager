@@ -37,10 +37,10 @@ export function generateInitialDevices(): Device[] {
   // 1. Chromebooks (Total 530: 23 classes * 20 = 460 in classrooms + 70 in Smart room)
   // Manufacturers: Samsung, LG, Lenovo, ASUS
   const chromebookMfrs = [
-    { name: '삼성전자', model: 'Galaxy Chromebook 2 360', count: 210 },
-    { name: 'LG', model: 'LG Chromebook 11T90N', count: 150 },
-    { name: '레노버', model: 'Lenovo 300e Yoga Chromebook Gen 4', count: 100 },
-    { name: 'ASUS', model: 'ASUS Chromebook Flip CR1 (CR1100)', count: 70 },
+    { name: '삼성전자', model: '삼성전자 크롬북', count: 210 },
+    { name: 'LG', model: 'LG 크롬북', count: 150 },
+    { name: '레노버', model: '레노버 크롬북', count: 100 },
+    { name: 'ASUS', model: 'ASUS 크롬북', count: 70 },
   ];
 
   // Prepare a flat pool of manufacturer models
@@ -205,18 +205,14 @@ export function generateInitialConsumables(): ConsumableInventory[] {
       locations.push(`${g}학년 ${c}반`);
     }
   }
-  locations.push('스마트실', '소모품 보관실');
+  locations.push('스마트실');
 
   locations.forEach((loc, idx) => {
     let wired = 0;
     let wireless = 0;
     let earphone = 0;
 
-    if (loc === '소모품 보관실') {
-      wired = 20;
-      wireless = 30;
-      earphone = 25;
-    } else if (loc === '스마트실') {
+    if (loc === '스마트실') {
       wired = 25;
       wireless = 25;
       earphone = 30;

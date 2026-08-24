@@ -241,15 +241,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Right Action Buttons */}
           <div className="flex items-center space-x-2.5">
             <button
-              id="btn-register-device-top"
-              onClick={onOpenRegisterModal}
-              className="flex items-center space-x-1.5 bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md transition-transform active:scale-95 border border-purple-500"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span className="hidden sm:inline">기기 등록</span>
-            </button>
-
-            <button
               id="btn-open-settings"
               onClick={onOpenSettingsModal}
               title="설정 및 데이터 관리"

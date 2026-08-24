@@ -23,8 +23,21 @@ export const ConsumablesManagement: React.FC = () => {
   const [editingMemoId, setEditingMemoId] = useState<string | null>(null);
   const [memoDraft, setMemoDraft] = useState<string>('');
 
+  const getLocationRank = (loc: string) => {
+    const match = loc.match(/(\d+)학년\s*(\d+)반/);
+    if (match) {
+      const grade = parseInt(match[1], 10);
+      const cls = parseInt(match[2], 10);
+      return grade * 100 + cls;
+    }
+    if (loc.includes('스마트')) return 9000;
+    return 9999;
+  };
+
   const filteredConsumables = useMemo(() => {
-    return consumables.filter((c) => {
+    const list = consumables.filter((c) => {
+      if (c.location.includes('보관실') || c.location === '소모품 보관실') return false;
+
       const matchSearch = searchQuery === '' || 
         c.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (c.requestMemo && c.requestMemo.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -34,6 +47,8 @@ export const ConsumablesManagement: React.FC = () => {
 
       return matchSearch && matchGrade;
     });
+
+    return list.sort((a, b) => getLocationRank(a.location) - getLocationRank(b.location));
   }, [consumables, searchQuery, gradeFilter]);
 
   const handleStartEditMemo = (item: ConsumableInventory) => {
@@ -71,57 +86,48 @@ export const ConsumablesManagement: React.FC = () => {
 
   return (
     <div className="space-y-8 pb-12">
-      {/* 1. TOP STATS BAR */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* 1. TOP STATS BAR (Mice and Earphones 50% / 50% split) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* MOUSE STATS */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-900 flex items-center justify-center">
-              <Mouse className="w-6 h-6" />
+            <div className="w-14 h-14 rounded-2xl bg-purple-100 text-purple-900 flex items-center justify-center shadow-xs">
+              <Mouse className="w-7 h-7" />
             </div>
             <div>
-              <div className="text-[10px] font-bold text-purple-700 uppercase tracking-widest">Mice Total</div>
-              <div className="text-3xl font-black text-slate-900 font-sans">{stats.mouse.total}<span className="text-sm font-bold text-slate-400 ml-1">개</span></div>
+              <div className="text-xs font-bold text-purple-700">마우스 배부 현황</div>
+              <div className="text-3xl sm:text-4xl font-black text-slate-900 font-sans tracking-tight">
+                {stats.mouse.total.toLocaleString()}<span className="text-base font-bold text-slate-400 ml-1.5">개</span>
+              </div>
             </div>
           </div>
-          <div className="text-right text-xs space-y-1">
-            <div className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-800 font-bold text-[11px]">유선 {stats.mouse.wired}개</div>
-            <div className="px-2.5 py-1 rounded-full bg-purple-100 text-purple-900 font-bold text-[11px]">무선 {stats.mouse.wireless}개</div>
+          <div className="text-right text-xs space-y-1.5">
+            <div className="px-3 py-1 rounded-full bg-slate-100 text-slate-800 font-bold text-xs">유선 {stats.mouse.assignedWired || stats.mouse.wired}개</div>
+            <div className="px-3 py-1 rounded-full bg-purple-100 text-purple-900 font-bold text-xs">무선 {stats.mouse.assignedWireless || stats.mouse.wireless}개</div>
           </div>
         </div>
 
+        {/* EARPHONE STATS */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-900 flex items-center justify-center">
-              <Headphones className="w-6 h-6" />
+            <div className="w-14 h-14 rounded-2xl bg-purple-100 text-purple-900 flex items-center justify-center shadow-xs">
+              <Headphones className="w-7 h-7" />
             </div>
             <div>
-              <div className="text-[10px] font-bold text-purple-700 uppercase tracking-widest">Earphones Total</div>
-              <div className="text-3xl font-black text-slate-900 font-sans">{stats.earphone.total}<span className="text-sm font-bold text-slate-400 ml-1">개</span></div>
+              <div className="text-xs font-bold text-purple-700">이어폰 배부 현황</div>
+              <div className="text-3xl sm:text-4xl font-black text-slate-900 font-sans tracking-tight">
+                {stats.earphone.total.toLocaleString()}<span className="text-base font-bold text-slate-400 ml-1.5">개</span>
+              </div>
             </div>
           </div>
-          <div className="text-right text-xs">
-            <span className="px-3 py-1.5 rounded-full bg-purple-100 text-purple-900 font-black text-xs">
+          <div className="text-right text-xs space-y-1.5">
+            <div className="px-3 py-1.5 rounded-full bg-purple-100 text-purple-900 font-black text-xs">
               학급 배정 {stats.earphone.assigned}개
-            </span>
-          </div>
-        </div>
-
-        <div className="bg-purple-900 text-white rounded-3xl p-6 sm:p-8 border border-purple-800 shadow-sm flex items-center justify-between">
-          <div>
-            <div className="text-[10px] text-purple-300 font-bold uppercase tracking-widest flex items-center gap-1.5">
-              <AlertCircle className="w-4 h-4 text-purple-300" />
-              <span>Consumable Stock Status</span>
             </div>
-            <div className="text-xl sm:text-2xl font-black mt-2 text-white">마우스 0개 · 이어폰 0개</div>
-            <div className="text-xs text-purple-300 mt-1 font-medium">학기 중 파손 대비 추가 품의 권장</div>
+            <div className="text-[11px] text-slate-400 font-medium">
+              스마트실 예비 {stats.earphone.spare}개
+            </div>
           </div>
-          <button
-            onClick={handleExportCSV}
-            className="px-4 py-2 bg-purple-800 hover:bg-purple-700 rounded-xl text-xs font-bold border border-purple-700 flex items-center gap-1.5 transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            <span>CSV</span>
-          </button>
         </div>
       </div>
 
@@ -129,13 +135,12 @@ export const ConsumablesManagement: React.FC = () => {
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
           <div>
-            <div className="text-[10px] font-bold text-purple-700 uppercase tracking-widest">Inventory Management</div>
             <h2 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2">
               <Package className="w-6 h-6 text-purple-900" />
-              학급 및 보관소별 소모품 상세 재고
+              학급 및 스마트실 소모품 상세 재고
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
-              각 학급의 유선/무선 마우스 및 이어폰 수량을 +/- 버튼으로 즉시 조율하고 요청 메모를 관리합니다.
+              각 학급의 유선/무선 마우스 및 이어폰 수량을 증감 버튼으로 즉시 조율하고 요청 메모를 관리합니다.
             </p>
           </div>
 
@@ -145,10 +150,10 @@ export const ConsumablesManagement: React.FC = () => {
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="학급명 / 메모 내용 검색"
+                placeholder="학급명 / 메모 검색"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-900 w-48 font-medium"
+                className="pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-900 w-44 font-medium"
               />
             </div>
 
@@ -159,14 +164,22 @@ export const ConsumablesManagement: React.FC = () => {
               className="text-xs border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-900 bg-white font-bold text-slate-700"
             >
               <option value="all">전체 장소</option>
-              <option value="1학년">1학년</option>
-              <option value="2학년">2학년</option>
               <option value="3학년">3학년</option>
               <option value="4학년">4학년</option>
               <option value="5학년">5학년</option>
               <option value="6학년">6학년</option>
               <option value="special">스마트실</option>
             </select>
+
+            {/* CSV Export */}
+            <button
+              onClick={handleExportCSV}
+              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors border border-slate-200"
+              title="CSV 파일 다운로드"
+            >
+              <Download className="w-4 h-4 text-slate-500" />
+              <span>CSV 내보내기</span>
+            </button>
           </div>
         </div>
 
@@ -175,12 +188,12 @@ export const ConsumablesManagement: React.FC = () => {
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
               <tr>
-                <th className="py-3 px-4">장소 / 학급</th>
-                <th className="py-3 px-4 text-center">유선 마우스 (개)</th>
-                <th className="py-3 px-4 text-center">무선 마우스 (개)</th>
-                <th className="py-3 px-4 text-center">마우스 합계</th>
-                <th className="py-3 px-4 text-center">이어폰 수량 (개)</th>
-                <th className="py-3 px-5">요청 사항 및 특이사항 메모</th>
+                <th className="py-3 px-3 whitespace-nowrap min-w-[120px]">장소 / 학급</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[110px]">유선 마우스</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[110px]">무선 마우스</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[90px]">마우스 합계</th>
+                <th className="py-3 px-3 text-center whitespace-nowrap min-w-[110px]">이어폰 수량</th>
+                <th className="py-3 px-4 min-w-[200px]">요청 사항 및 특이사항 메모</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -190,18 +203,18 @@ export const ConsumablesManagement: React.FC = () => {
 
                 return (
                   <tr key={item.id} className="hover:bg-purple-50/40 transition-colors">
-                    <td className="py-4 px-4 font-black text-slate-900">
-                      <span className="px-3 py-1 rounded-xl bg-slate-100 text-slate-900 font-bold text-xs">
+                    <td className="py-3 px-3 font-bold text-slate-900 whitespace-nowrap">
+                      <span className="px-2.5 py-1 rounded-xl bg-purple-50 text-purple-950 font-black border border-purple-100 text-xs whitespace-nowrap inline-block">
                         {item.location}
                       </span>
                     </td>
 
                     {/* Wired Mouse Stepper */}
-                    <td className="py-4 px-4">
-                      <div className="flex items-center justify-center space-x-2">
+                    <td className="py-3 px-3 whitespace-nowrap">
+                      <div className="flex items-center justify-center space-x-1.5">
                         <button
                           onClick={() => updateConsumableCount(item.id, 'mouseWiredCount', -1)}
-                          className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center justify-center active:scale-95 transition-all font-bold"
+                          className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center justify-center active:scale-95 transition-all font-bold cursor-pointer"
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </button>
@@ -210,7 +223,7 @@ export const ConsumablesManagement: React.FC = () => {
                         </span>
                         <button
                           onClick={() => updateConsumableCount(item.id, 'mouseWiredCount', 1)}
-                          className="w-7 h-7 rounded-lg bg-purple-900 hover:bg-purple-800 text-white flex items-center justify-center active:scale-95 transition-all shadow-xs"
+                          className="w-7 h-7 rounded-lg bg-purple-900 hover:bg-purple-800 text-white flex items-center justify-center active:scale-95 transition-all shadow-xs cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>
@@ -218,11 +231,11 @@ export const ConsumablesManagement: React.FC = () => {
                     </td>
 
                     {/* Wireless Mouse Stepper */}
-                    <td className="py-4 px-4">
-                      <div className="flex items-center justify-center space-x-2">
+                    <td className="py-3 px-3 whitespace-nowrap">
+                      <div className="flex items-center justify-center space-x-1.5">
                         <button
                           onClick={() => updateConsumableCount(item.id, 'mouseWirelessCount', -1)}
-                          className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center justify-center active:scale-95 transition-all font-bold"
+                          className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center justify-center active:scale-95 transition-all font-bold cursor-pointer"
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </button>
@@ -231,7 +244,7 @@ export const ConsumablesManagement: React.FC = () => {
                         </span>
                         <button
                           onClick={() => updateConsumableCount(item.id, 'mouseWirelessCount', 1)}
-                          className="w-7 h-7 rounded-lg bg-purple-900 hover:bg-purple-800 text-white flex items-center justify-center active:scale-95 transition-all shadow-xs"
+                          className="w-7 h-7 rounded-lg bg-purple-900 hover:bg-purple-800 text-white flex items-center justify-center active:scale-95 transition-all shadow-xs cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>
@@ -239,16 +252,16 @@ export const ConsumablesManagement: React.FC = () => {
                     </td>
 
                     {/* Mouse Total */}
-                    <td className="py-4 px-4 text-center font-black text-sm text-purple-950 font-mono">
+                    <td className="py-3 px-3 text-center font-black text-sm text-purple-950 font-mono whitespace-nowrap">
                       {totalMouse}개
                     </td>
 
                     {/* Earphone Stepper */}
-                    <td className="py-4 px-4">
-                      <div className="flex items-center justify-center space-x-2">
+                    <td className="py-3 px-3 whitespace-nowrap">
+                      <div className="flex items-center justify-center space-x-1.5">
                         <button
                           onClick={() => updateConsumableCount(item.id, 'earphoneCount', -1)}
-                          className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center justify-center active:scale-95 transition-all font-bold"
+                          className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center justify-center active:scale-95 transition-all font-bold cursor-pointer"
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </button>
@@ -257,7 +270,7 @@ export const ConsumablesManagement: React.FC = () => {
                         </span>
                         <button
                           onClick={() => updateConsumableCount(item.id, 'earphoneCount', 1)}
-                          className="w-7 h-7 rounded-lg bg-purple-900 hover:bg-purple-800 text-white flex items-center justify-center active:scale-95 transition-all shadow-xs"
+                          className="w-7 h-7 rounded-lg bg-purple-900 hover:bg-purple-800 text-white flex items-center justify-center active:scale-95 transition-all shadow-xs cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>
@@ -265,7 +278,7 @@ export const ConsumablesManagement: React.FC = () => {
                     </td>
 
                     {/* Request Memo Field */}
-                    <td className="py-4 px-5">
+                    <td className="py-3 px-4">
                       {isEditing ? (
                         <div className="flex items-center space-x-2">
                           <input
@@ -277,7 +290,7 @@ export const ConsumablesManagement: React.FC = () => {
                           />
                           <button
                             onClick={() => handleSaveMemo(item.id)}
-                            className="px-3 py-1.5 bg-purple-900 hover:bg-purple-800 text-white rounded-xl text-xs font-bold flex items-center gap-1 shrink-0 transition-colors"
+                            className="px-3 py-1.5 bg-purple-900 hover:bg-purple-800 text-white rounded-xl text-xs font-bold flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
                           >
                             <Save className="w-3.5 h-3.5" />
                             <span>저장</span>
@@ -288,7 +301,7 @@ export const ConsumablesManagement: React.FC = () => {
                           onClick={() => handleStartEditMemo(item)}
                           className="group flex items-center justify-between p-2 rounded-xl bg-slate-50 hover:bg-purple-50/60 cursor-pointer border border-slate-100 transition-colors"
                         >
-                          <span className={`text-xs truncate ${item.requestMemo ? 'text-slate-900 font-semibold' : 'text-slate-400 italic'}`}>
+                          <span className={`text-xs truncate max-w-xs ${item.requestMemo ? 'text-slate-900 font-semibold' : 'text-slate-400 italic'}`}>
                             {item.requestMemo || '메모 없음 (클릭하여 작성)'}
                           </span>
                           <Edit3 className="w-3.5 h-3.5 text-slate-400 group-hover:text-purple-900 shrink-0 ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity" />

@@ -34,7 +34,7 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
   onSelectDevice,
   onOpenRegisterModal,
 }) => {
-  const { devices, deleteDevice, deleteMultipleDevices, batchUpdateStatus, updateDevice } = useDevices();
+  const { devices, stats, deleteDevice, deleteMultipleDevices, batchUpdateStatus, updateDevice } = useDevices();
 
   // Helper to rank locations (1학년 1반 < 1학년 2반 < ... < 6학년 < 스마트실)
   const getLocationRank = (loc: string) => {
@@ -62,10 +62,23 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
   const [statusEditValue, setStatusEditValue] = useState<DeviceStatus>('normal');
   const [statusIssueReason, setStatusIssueReason] = useState<string>('');
 
+  // Delete Modal & Confirmation States
+  const [deviceToDelete, setDeviceToDelete] = useState<Device | null>(null);
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState<boolean>(false);
+  const [batchStatusTarget, setBatchStatusTarget] = useState<DeviceStatus | null>(null);
+  const [actionToast, setActionToast] = useState<string | null>(null);
+
   // Multi-selection state
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage, setItemsPerPage] = useState<number>(50);
+
+  const showToast = (message: string) => {
+    setActionToast(message);
+    setTimeout(() => {
+      setActionToast(null);
+    }, 3000);
+  };
 
   // Open status change dialog
   const handleOpenStatusModal = (device: Device, e?: React.MouseEvent) => {
@@ -125,6 +138,23 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
     return Array.from(set).sort();
   }, [devices]);
 
+  const samsungCount = stats.chromebook.byManufacturer['삼성전자']?.total || 0;
+  const lgCount = (stats.chromebook.byManufacturer['LG']?.total || 0) + (stats.chromebook.byManufacturer['LG전자']?.total || 0);
+  const lenovoCount = stats.chromebook.byManufacturer['레노버']?.total || 0;
+  const asusCount = stats.chromebook.byManufacturer['ASUS']?.total || 0;
+  const otherCount = Object.entries(stats.chromebook.byManufacturer)
+    .filter(([key]) => !['삼성전자', 'LG', 'LG전자', '레노버', 'ASUS'].includes(key))
+    .reduce((sum, [, val]) => sum + ((val as { total?: number })?.total || 0), 0);
+
+  const mfrFilterOptions = useMemo(() => [
+    { key: 'all', label: '전체', count: stats.chromebook.total },
+    { key: '삼성전자', label: '삼성전자', count: samsungCount },
+    { key: 'LG', label: 'LG', count: lgCount },
+    { key: '레노버', label: '레노버', count: lenovoCount },
+    { key: 'ASUS', label: 'ASUS', count: asusCount },
+    ...(otherCount > 0 ? [{ key: '기타', label: '기타', count: otherCount }] : []),
+  ], [stats.chromebook.total, samsungCount, lgCount, lenovoCount, asusCount, otherCount]);
+
   // Filtered & Sorted Devices
   const filteredDevices = useMemo(() => {
     return devices.filter((d) => {
@@ -146,7 +176,17 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
 
       const matchType = selectedType === 'all' || d.deviceType === selectedType;
       const matchStatus = selectedStatus === 'all' || d.status === selectedStatus;
-      const matchMfr = selectedMfr === 'all' || d.manufacturer === selectedMfr;
+      
+      const matchMfr =
+        selectedMfr === 'all' ||
+        (selectedMfr === 'LG' && (d.manufacturer === 'LG' || d.manufacturer === 'LG전자' || d.manufacturer === 'LG ELECTRONICS')) ||
+        (selectedMfr === 'LG전자' && (d.manufacturer === 'LG' || d.manufacturer === 'LG전자' || d.manufacturer === 'LG ELECTRONICS')) ||
+        (selectedMfr === '삼성전자' && (d.manufacturer === '삼성전자' || d.manufacturer?.includes('삼성'))) ||
+        (selectedMfr === '레노버' && (d.manufacturer === '레노버' || d.manufacturer?.toLowerCase().includes('lenovo'))) ||
+        (selectedMfr === 'ASUS' && (d.manufacturer === 'ASUS' || d.manufacturer?.toLowerCase().includes('asus'))) ||
+        (selectedMfr === '기타' && !['삼성전자', 'LG', 'LG전자', '레노버', 'ASUS'].includes(d.manufacturer || '')) ||
+        d.manufacturer === selectedMfr;
+
       const matchLoc = selectedLocation === 'all' || d.location === selectedLocation;
 
       return matchSearch && matchType && matchStatus && matchMfr && matchLoc;
@@ -236,22 +276,40 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
   // Batch Status Change
   const handleBatchStatus = (status: DeviceStatus) => {
     if (selectedIds.length === 0) return;
+    setBatchStatusTarget(status);
+  };
+
+  const handleConfirmBatchStatus = () => {
+    if (!batchStatusTarget || selectedIds.length === 0) return;
     const count = selectedIds.length;
-    const statusText = status === 'normal' ? '정상' : status === 'repair' ? '수리 중' : '고장';
-    if (window.confirm(`선택한 ${count}개 기기의 상태를 [${statusText}](으)로 일괄 변경하시겠습니까?`)) {
-      batchUpdateStatus(selectedIds, status, `일괄 상태 변경 (${statusText})`);
-      setSelectedIds([]);
-    }
+    const statusText = batchStatusTarget === 'normal' ? '정상' : batchStatusTarget === 'repair' ? '수리중' : '고장';
+    batchUpdateStatus(selectedIds, batchStatusTarget, `일괄 상태 변경 (${statusText})`);
+    showToast(`${count}개 기기의 상태가 [${statusText}](으)로 변경되었습니다.`);
+    setSelectedIds([]);
+    setBatchStatusTarget(null);
   };
 
   // Batch Delete
   const handleBatchDelete = () => {
     if (selectedIds.length === 0) return;
+    setShowBatchDeleteConfirm(true);
+  };
+
+  const handleConfirmBatchDelete = () => {
+    if (selectedIds.length === 0) return;
     const count = selectedIds.length;
-    if (window.confirm(`선택한 ${count}개 기기를 영구 삭제하시겠습니까?`)) {
-      deleteMultipleDevices(selectedIds);
-      setSelectedIds([]);
-    }
+    deleteMultipleDevices(selectedIds);
+    showToast(`${count}개 기기가 목록 및 클라우드에서 영구 삭제되었습니다.`);
+    setSelectedIds([]);
+    setShowBatchDeleteConfirm(false);
+  };
+
+  const handleConfirmSingleDelete = () => {
+    if (!deviceToDelete) return;
+    const name = deviceToDelete.managementNumber || deviceToDelete.deviceName || '기기';
+    deleteDevice(deviceToDelete.id);
+    showToast(`${name} 기기가 정상적으로 삭제되었습니다.`);
+    setDeviceToDelete(null);
   };
 
   // Export CSV
@@ -295,7 +353,7 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
           <div>
-            <div className="text-[10px] font-bold text-purple-700 uppercase tracking-widest">Device Catalog</div>
+            <div className="text-[10px] font-bold text-purple-700">기기 통합 관리</div>
             <h2 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2">
               <Laptop className="w-6 h-6 text-purple-900" />
               전체 기기 목록 및 관리
@@ -313,18 +371,11 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
               <Download className="w-4 h-4 text-slate-500" />
               <span>CSV 내보내기</span>
             </button>
-            <button
-              onClick={onOpenRegisterModal}
-              className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-purple-900 hover:bg-purple-800 text-white text-xs font-black shadow-sm transition-colors"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span>새 기기 등록</span>
-            </button>
           </div>
         </div>
 
         {/* Search & Filter Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           {/* Text Search Field */}
           <div className="sm:col-span-2 relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -339,23 +390,6 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
               }}
               className="w-full pl-10 pr-3 py-2.5 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-900 bg-slate-50/50 font-medium"
             />
-          </div>
-
-          {/* Type Filter */}
-          <div>
-            <select
-              value={selectedType}
-              onChange={(e) => {
-                setSelectedType(e.target.value as any);
-                setCurrentPage(1);
-              }}
-              className="w-full py-2.5 px-3 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-900 bg-white font-bold text-slate-700"
-            >
-              <option value="all">기기 종류 (전체)</option>
-              <option value="chromebook">크롬북 (Chromebook)</option>
-              <option value="mouse">마우스 (Mouse)</option>
-              <option value="earphone">이어폰 (Earphone)</option>
-            </select>
           </div>
 
           {/* Status Filter */}
@@ -415,22 +449,27 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
           </div>
 
           {/* Quick Manufacturer Filter Chips */}
-          <div className="flex items-center space-x-2">
-            <span className="text-slate-400 text-xs font-bold">제조사:</span>
-            {['all', '삼성전자', 'LG전자', '레노버', 'ASUS'].map((mfr) => (
+          <div className="flex items-center space-x-1.5 flex-wrap gap-y-1.5">
+            <span className="text-slate-400 text-xs font-bold mr-1">제조사:</span>
+            {mfrFilterOptions.map((mfr) => (
               <button
-                key={mfr}
+                key={mfr.key}
                 onClick={() => {
-                  setSelectedMfr(mfr);
+                  setSelectedMfr(mfr.key);
                   setCurrentPage(1);
                 }}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
-                  selectedMfr === mfr
-                    ? 'bg-purple-900 text-white'
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors inline-flex items-center gap-1.5 ${
+                  selectedMfr === mfr.key
+                    ? 'bg-purple-900 text-white shadow-xs'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
-                {mfr === 'all' ? '전체' : mfr}
+                <span>{mfr.label}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-bold ${
+                  selectedMfr === mfr.key ? 'bg-purple-800 text-white' : 'bg-slate-200 text-slate-600'
+                }`}>
+                  {mfr.count}대
+                </span>
               </button>
             ))}
           </div>
@@ -492,43 +531,43 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
               <tr>
-                <th className="py-4 px-4 w-12 text-center">
+                <th className="py-3 px-3 w-10 text-center">
                   <button
                     onClick={handleToggleSelectAll}
                     className="text-slate-400 hover:text-purple-900 focus:outline-none"
                     title="현재 페이지 전체 선택"
                   >
                     {isAllCurrentSelected ? (
-                      <CheckSquare className="w-5 h-5 text-purple-900" />
+                      <CheckSquare className="w-4 h-4 text-purple-900" />
                     ) : (
-                      <Square className="w-5 h-5" />
+                      <Square className="w-4 h-4" />
                     )}
                   </button>
                 </th>
                 <th 
-                  className={`py-4 px-4 cursor-pointer transition-colors ${
+                  className={`py-3 px-3 cursor-pointer transition-colors whitespace-nowrap min-w-[110px] ${
                     sortBy === 'location' ? 'bg-purple-100/60 text-purple-950 font-black' : 'hover:bg-slate-100/70'
                   }`}
                   onClick={() => handleSort('location')}
                 >
                   <div className="flex items-center gap-1.5">
-                    <span>보관 장소 (학급순)</span>
+                    <span>보관 장소</span>
                     <ArrowUpDown className={`w-3.5 h-3.5 ${sortBy === 'location' ? 'text-purple-900' : 'text-slate-400'}`} />
                   </div>
                 </th>
                 <th 
-                  className={`py-4 px-4 cursor-pointer transition-colors ${
+                  className={`py-3 px-3 w-20 text-center cursor-pointer transition-colors whitespace-nowrap ${
                     sortBy === 'classDeviceNumber' ? 'bg-purple-100/60 text-purple-950 font-black' : 'hover:bg-slate-100/70'
                   }`}
                   onClick={() => handleSort('classDeviceNumber')}
                 >
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center justify-center gap-1.5">
                     <span>반 번호</span>
                     <ArrowUpDown className={`w-3.5 h-3.5 ${sortBy === 'classDeviceNumber' ? 'text-purple-900' : 'text-slate-400'}`} />
                   </div>
                 </th>
                 <th 
-                  className={`py-4 px-4 cursor-pointer transition-colors ${
+                  className={`py-3 px-3 cursor-pointer transition-colors whitespace-nowrap min-w-[130px] ${
                     sortBy === 'managementNumber' ? 'bg-purple-100/60 text-purple-950 font-black' : 'hover:bg-slate-100/70'
                   }`}
                   onClick={() => handleSort('managementNumber')}
@@ -538,10 +577,10 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
                     <ArrowUpDown className={`w-3.5 h-3.5 ${sortBy === 'managementNumber' ? 'text-purple-900' : 'text-slate-400'}`} />
                   </div>
                 </th>
-                <th className="py-4 px-4">기기종류</th>
-                <th className="py-4 px-4">기기명</th>
+                <th className="py-3 px-3 whitespace-nowrap min-w-[80px]">기기종류</th>
+                <th className="py-3 px-3 whitespace-nowrap min-w-[130px]">기기명</th>
                 <th 
-                  className={`py-4 px-4 cursor-pointer transition-colors ${
+                  className={`py-3 px-3 cursor-pointer transition-colors whitespace-nowrap min-w-[90px] ${
                     sortBy === 'status' ? 'bg-purple-100/60 text-purple-950 font-black' : 'hover:bg-slate-100/70'
                   }`}
                   onClick={() => handleSort('status')}
@@ -551,8 +590,8 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
                     <ArrowUpDown className={`w-3.5 h-3.5 ${sortBy === 'status' ? 'text-purple-900' : 'text-slate-400'}`} />
                   </div>
                 </th>
-                <th className="py-4 px-5">고장/수리 내용</th>
-                <th className="py-4 px-4 text-right">작업</th>
+                <th className="py-3 px-3 min-w-[180px]">고장/수리 내용</th>
+                <th className="py-3 px-3 text-right whitespace-nowrap w-24">작업</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -568,30 +607,30 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
                     }`}
                     onClick={() => onSelectDevice(device)}
                   >
-                    <td className="py-4 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                    <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => handleToggleSelect(device.id)}
                         className="text-slate-400 hover:text-purple-900 focus:outline-none"
                       >
                         {isSelected ? (
-                          <CheckSquare className="w-5 h-5 text-purple-900" />
+                          <CheckSquare className="w-4 h-4 text-purple-900" />
                         ) : (
-                          <Square className="w-5 h-5" />
+                          <Square className="w-4 h-4" />
                         )}
                       </button>
                     </td>
 
                     {/* 1. Location */}
-                    <td className="py-4 px-4 font-bold text-slate-900">
-                      <span className="px-2.5 py-1 rounded-xl bg-purple-50 text-purple-950 font-black border border-purple-100 text-xs">
+                    <td className="py-3 px-3 font-bold text-slate-900 whitespace-nowrap">
+                      <span className="px-2.5 py-1 rounded-xl bg-purple-50 text-purple-950 font-black border border-purple-100 text-xs whitespace-nowrap inline-block">
                         {device.location}
                       </span>
                     </td>
 
                     {/* 2. Class Device Number */}
-                    <td className="py-4 px-4">
+                    <td className="py-3 px-3 text-center whitespace-nowrap">
                       {device.classDeviceNumber !== undefined ? (
-                        <span className="px-2.5 py-1 rounded-lg bg-purple-900 text-white font-black text-xs">
+                        <span className="inline-flex items-center justify-center min-w-[36px] px-2 py-0.5 rounded-xl bg-purple-100 text-purple-950 border border-purple-200/80 font-black text-xs">
                           {device.classDeviceNumber}번
                         </span>
                       ) : (
@@ -600,32 +639,34 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
                     </td>
 
                     {/* 3. Management Number */}
-                    <td className="py-4 px-4 font-mono font-bold text-purple-950 text-xs">
+                    <td className="py-3 px-3 font-mono font-bold text-purple-950 text-xs whitespace-nowrap">
                       {device.managementNumber ? (
-                        <span>{device.managementNumber}</span>
+                        <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-800 border border-slate-200 font-mono font-bold inline-block">
+                          {device.managementNumber}
+                        </span>
                       ) : (
-                        <span className="text-slate-400 font-normal italic">미입력</span>
+                        <span className="text-slate-400 font-normal italic text-[11px]">미입력</span>
                       )}
                     </td>
 
                     {/* 4. Device Type */}
-                    <td className="py-4 px-4">
-                      <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 font-bold text-[11px]">
+                    <td className="py-3 px-3 whitespace-nowrap">
+                      <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 font-bold text-[11px] whitespace-nowrap inline-block">
                         {getDeviceTypeLabel(device.deviceType)}
                       </span>
                     </td>
 
                     {/* 5. Device Name */}
-                    <td className="py-4 px-4 text-slate-800">
-                      <div className="font-black text-slate-900">{device.deviceName}</div>
+                    <td className="py-3 px-3 text-slate-900 font-bold whitespace-nowrap">
+                      <span className="whitespace-nowrap block">{device.deviceName}</span>
                     </td>
 
                     {/* 6. Status Badge / Button */}
-                    <td className="py-4 px-4" onClick={(e) => e.stopPropagation()}>
+                    <td className="py-3 px-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
                         onClick={() => handleOpenStatusModal(device)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black border transition-all hover:scale-105 hover:shadow-xs active:scale-95 cursor-pointer font-sans ${badge.bg}`}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black border transition-all hover:scale-105 hover:shadow-xs active:scale-95 cursor-pointer font-sans whitespace-nowrap ${badge.bg}`}
                         title="클릭하여 상태 및 고장원인/수리내용 작성"
                       >
                         <span className={`w-2 h-2 rounded-full ${badge.dot}`} />
@@ -634,11 +675,11 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
                     </td>
 
                     {/* 7. Issues / Repair Notes (Next to Status) */}
-                    <td className="py-4 px-5 text-xs font-medium" onClick={(e) => e.stopPropagation()}>
+                    <td className="py-3 px-3 text-xs font-medium" onClick={(e) => e.stopPropagation()}>
                       {device.status === 'broken' ? (
                         <div 
                           onClick={() => handleOpenStatusModal(device)}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 font-bold border border-rose-200 cursor-pointer hover:bg-rose-100 transition-colors max-w-xs"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 font-bold border border-rose-200 cursor-pointer hover:bg-rose-100 transition-colors max-w-sm"
                           title="클릭하여 고장 원인 수정"
                         >
                           <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
@@ -647,36 +688,35 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
                       ) : device.status === 'repair' ? (
                         <div 
                           onClick={() => handleOpenStatusModal(device)}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-bold border border-amber-200 cursor-pointer hover:bg-amber-100 transition-colors max-w-xs"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-bold border border-amber-200 cursor-pointer hover:bg-amber-100 transition-colors max-w-sm"
                           title="클릭하여 수리 내용 수정"
                         >
                           <Wrench className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                           <span className="truncate">{device.repairDescription || device.issueDescription || '수리 진행 중 (클릭하여 입력)'}</span>
                         </div>
                       ) : device.note ? (
-                        <span className="text-slate-500 truncate">{device.note}</span>
+                        <span className="text-slate-500 truncate block max-w-xs">{device.note}</span>
                       ) : (
                         <span className="text-slate-300">-</span>
                       )}
                     </td>
 
                     {/* 8. Actions */}
-                    <td className="py-4 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end space-x-2">
+                    <td className="py-3 px-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end space-x-1.5">
                         <button
                           onClick={() => onSelectDevice(device)}
-                          className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 rounded-xl font-bold transition-colors"
+                          className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold transition-colors whitespace-nowrap text-xs"
                         >
                           상세
                         </button>
                         <button
-                          onClick={() => {
-                            if (window.confirm(`${device.managementNumber || device.deviceName} 기기를 삭제하시겠습니까?`)) {
-                              deleteDevice(device.id);
-                            }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeviceToDelete(device);
                           }}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors"
-                          title="삭제"
+                          className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors rounded-lg hover:bg-rose-50 cursor-pointer"
+                          title="기기 삭제"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -917,19 +957,182 @@ export const DeviceManagement: React.FC<DeviceManagementProps> = ({
                 <button
                   type="button"
                   onClick={() => setStatusEditDevice(null)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-100"
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-100 cursor-pointer"
                 >
                   취소
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-purple-900 text-white font-black hover:bg-purple-800 shadow-sm"
+                  className="px-5 py-2.5 rounded-xl bg-purple-900 text-white font-black hover:bg-purple-800 shadow-sm cursor-pointer"
                 >
                   상태 및 내용 저장
                 </button>
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* SINGLE DEVICE DELETE MODAL */}
+      {deviceToDelete && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150 space-y-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">기기 삭제 확인</h3>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">선택하신 기기를 시스템에서 영구 삭제합니다.</p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
+              <div className="flex justify-between py-1 border-b border-slate-200/60">
+                <span className="text-slate-500 font-medium">기기명</span>
+                <span className="font-black text-slate-900">{deviceToDelete.deviceName}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-200/60">
+                <span className="text-slate-500 font-medium">보관 장소</span>
+                <span className="font-black text-slate-900">
+                  {deviceToDelete.location} {deviceToDelete.classDeviceNumber ? `${deviceToDelete.classDeviceNumber}번` : ''}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-200/60">
+                <span className="text-slate-500 font-medium">관리번호</span>
+                <span className="font-mono font-black text-purple-950">{deviceToDelete.managementNumber || '(미지정)'}</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-slate-500 font-medium">현재 상태</span>
+                <span className="font-bold text-slate-800">
+                  {deviceToDelete.status === 'normal' ? '정상' : deviceToDelete.status === 'repair' ? '수리중' : '고장'}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-rose-600 font-bold bg-rose-50 p-3 rounded-xl border border-rose-200 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>삭제 시 해당 기기의 모든 이력이 영구 제거되며, 로컬 및 클라우드(Firestore) 데이터베이스에서 즉시 동기화 삭제됩니다.</span>
+            </p>
+
+            <div className="pt-2 flex items-center justify-end space-x-2">
+              <button
+                type="button"
+                onClick={() => setDeviceToDelete(null)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-100 cursor-pointer"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSingleDelete}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-black hover:bg-rose-700 shadow-sm cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>기기 영구 삭제</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BATCH DELETE CONFIRMATION MODAL */}
+      {showBatchDeleteConfirm && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150 space-y-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">선택 기기 일괄 삭제 확인</h3>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  선택한 <strong className="text-rose-600 font-black">{selectedIds.length}개</strong>의 기기를 영구 삭제합니다.
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-rose-600 font-bold bg-rose-50 p-3.5 rounded-xl border border-rose-200 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>선택하신 {selectedIds.length}개 기기 데이터 및 관련 수리 이력이 모두 영구 삭제됩니다. 계속 진행하시겠습니까?</span>
+            </p>
+
+            <div className="pt-2 flex items-center justify-end space-x-2">
+              <button
+                type="button"
+                onClick={() => setShowBatchDeleteConfirm(false)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-100 cursor-pointer"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmBatchDelete}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-black hover:bg-rose-700 shadow-sm cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>선택한 {selectedIds.length}개 기기 삭제</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BATCH STATUS CHANGE MODAL */}
+      {batchStatusTarget && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150 space-y-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-900 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">선택 기기 일괄 상태 변경</h3>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  선택한 <strong className="text-purple-950 font-black">{selectedIds.length}개</strong>의 기기 상태를 변경합니다.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">대상 기기 수</span>
+                <span className="font-black text-slate-900">{selectedIds.length}개</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">변경할 상태</span>
+                <span className="font-black text-purple-900">
+                  {batchStatusTarget === 'normal' ? '정상' : batchStatusTarget === 'repair' ? '수리중' : '고장'}
+                </span>
+              </div>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end space-x-2">
+              <button
+                type="button"
+                onClick={() => setBatchStatusTarget(null)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-100 cursor-pointer"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmBatchStatus}
+                className="px-5 py-2.5 rounded-xl bg-purple-900 text-white text-xs font-black hover:bg-purple-800 shadow-sm cursor-pointer flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>일괄 변경 적용</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FLOATING ACTION TOAST */}
+      {actionToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-bold animate-in slide-in-from-bottom-5 duration-200 border border-slate-800">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{actionToast}</span>
         </div>
       )}
     </div>
