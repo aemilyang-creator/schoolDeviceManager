@@ -50,6 +50,7 @@ interface DeviceContextType {
   syncStatus: SyncStatus;
   isOnline: boolean;
   lastSyncedAt: Date | null;
+  isInitialLoadDone: boolean;
   addDevice: (newDevice: Omit<Device, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   batchAddDevices: (devices: Array<Omit<Device, 'id' | 'createdAt' | 'updatedAt'>>) => Promise<void>;
   updateDevice: (id: string, updates: Partial<Device>, reason?: string) => Promise<void>;
@@ -129,9 +130,8 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('syncing');
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
-  const [isInitialLoadDone, setIsInitialLoadDone] = useState<boolean>(false);
 
-  // Local state initialized with clean cache or initial generators
+  // Local state initialized with cached data if present
   const [devices, setDevices] = useState<Device[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.DEVICES);
@@ -144,7 +144,7 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (e) {
       console.error('Failed to load devices from localStorage', e);
     }
-    return generateInitialDevices();
+    return [];
   });
 
   const [consumables, setConsumables] = useState<ConsumableInventory[]>(() => {
@@ -159,7 +159,7 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (e) {
       console.error('Failed to load consumables from localStorage', e);
     }
-    return generateInitialConsumables();
+    return [];
   });
 
   const [systemConfig, setSystemConfig] = useState<SystemConfig>(() => {
@@ -177,6 +177,22 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       console.error('Failed to load config from localStorage', e);
     }
     return INITIAL_SYSTEM_CONFIG;
+  });
+
+  // Flag indicating if initial data has loaded (either from cache or cloud)
+  const [isInitialLoadDone, setIsInitialLoadDone] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.DEVICES);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return true;
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    return false;
   });
 
   // Track online/offline status
@@ -1056,6 +1072,7 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         syncStatus,
         isOnline,
         lastSyncedAt,
+        isInitialLoadDone,
         addDevice,
         batchAddDevices,
         updateDevice,

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Laptop, RefreshCw } from 'lucide-react';
 import { DeviceProvider, useDevices } from './context/DeviceContext';
 import { Navbar } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
@@ -12,7 +13,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { Device, DeviceStatus } from './types';
 
 function MainApp() {
-  const { updateDevice } = useDevices();
+  const { updateDevice, isInitialLoadDone, devices, systemConfig } = useDevices();
 
   // Navigation tab
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'classes' | 'devices' | 'consumables' | 'report'>('dashboard');
@@ -34,6 +35,30 @@ function MainApp() {
       reason
     );
   };
+
+  // Show clean loading state on initial cloud fetch to avoid flashing wrong default numbers
+  if (!isInitialLoadDone && devices.length === 0) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-slate-800 selection:bg-purple-600 selection:text-white">
+        <div className="bg-white p-8 rounded-3xl shadow-xl border border-purple-100/80 flex flex-col items-center max-w-sm w-full text-center space-y-4">
+          <div className="w-16 h-16 bg-purple-100 text-purple-900 rounded-2xl flex items-center justify-center shadow-inner">
+            <Laptop className="w-8 h-8 text-purple-900 animate-pulse" />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-purple-950">{systemConfig.schoolName || '제주초등학교'} 디지털기기 관리</h2>
+            <p className="text-xs text-slate-500 font-medium mt-1">클라우드 최신 기기 데이터 동기화 중...</p>
+          </div>
+          <div className="w-full bg-purple-50 rounded-full h-2 overflow-hidden">
+            <div className="bg-purple-700 h-2 rounded-full w-2/3 animate-pulse"></div>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-semibold text-purple-900/80 pt-1">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            <span>Firebase Firestore 실시간 데이터 로드 중</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col selection:bg-purple-600 selection:text-white">
