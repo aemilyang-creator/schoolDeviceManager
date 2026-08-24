@@ -200,21 +200,15 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return INITIAL_SYSTEM_CONFIG;
   });
 
-  // Flag indicating if initial data has loaded (either from cache or cloud)
-  const [isInitialLoadDone, setIsInitialLoadDone] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.DEVICES);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return true;
-        }
-      }
-    } catch (e) {
-      // ignore
-    }
-    return false;
+  // Browser cache is kept only as an offline fallback. Wait for every shared
+  // resource, so none of the dashboard can briefly render stale local values.
+  const [initialLoadStatus, setInitialLoadStatus] = useState({
+    devices: false,
+    consumables: false,
+    config: false,
   });
+  const isInitialLoadDone =
+    initialLoadStatus.devices && initialLoadStatus.consumables && initialLoadStatus.config;
 
   // Track online/offline status
   useEffect(() => {
@@ -292,11 +286,14 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
             setLastSyncedAt(new Date());
             setSyncStatus('synced');
-            setIsInitialLoadDone(true);
+            setInitialLoadStatus((status) => ({ ...status, devices: true }));
           },
           (error) => {
             console.error('Firestore devices listener error:', error);
             setSyncStatus('error');
+            // If the network is unavailable, allow the existing local cache to
+            // be used instead of leaving the application on a permanent loader.
+            setInitialLoadStatus((status) => ({ ...status, devices: true }));
           }
         );
 
@@ -327,9 +324,11 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               setConsumables(remoteCons);
             }
             setLastSyncedAt(new Date());
+            setInitialLoadStatus((status) => ({ ...status, consumables: true }));
           },
           (error) => {
             console.error('Firestore consumables listener error:', error);
+            setInitialLoadStatus((status) => ({ ...status, consumables: true }));
           }
         );
 
@@ -353,14 +352,17 @@ export const DeviceProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               });
             }
             setLastSyncedAt(new Date());
+            setInitialLoadStatus((status) => ({ ...status, config: true }));
           },
           (error) => {
             console.error('Firestore config listener error:', error);
+            setInitialLoadStatus((status) => ({ ...status, config: true }));
           }
         );
       } catch (err) {
         console.error('Failed to setup Firestore listeners:', err);
         setSyncStatus('error');
+        setInitialLoadStatus({ devices: true, consumables: true, config: true });
       }
     };
 

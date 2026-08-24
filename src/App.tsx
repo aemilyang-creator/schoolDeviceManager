@@ -13,7 +13,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { Device, DeviceStatus } from './types';
 
 function MainApp() {
-  const { updateDevice, isInitialLoadDone, devices, systemConfig } = useDevices();
+  const { updateDevice, isInitialLoadDone, systemConfig } = useDevices();
 
   // Navigation tab
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'classes' | 'devices' | 'consumables' | 'report'>('dashboard');
@@ -36,8 +36,10 @@ function MainApp() {
     );
   };
 
-  // Show clean loading state on initial cloud fetch to avoid flashing wrong default numbers
-  if (!isInitialLoadDone && devices.length === 0) {
+  // Do not render browser-cached data before Firestore returns its first snapshot.
+  // Rendering it here causes a visible flash of stale records before the latest
+  // shared data replaces it.
+  if (!isInitialLoadDone) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-slate-800 selection:bg-purple-600 selection:text-white">
         <div className="bg-white p-8 rounded-3xl shadow-xl border border-purple-100/80 flex flex-col items-center max-w-sm w-full text-center space-y-4">
