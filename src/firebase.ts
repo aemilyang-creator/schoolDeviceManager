@@ -15,17 +15,27 @@ import {
   Firestore
 } from 'firebase/firestore';
 
-// Default config from firebase-applet-config.json
-const firebaseConfig = {
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'ai-studio-applet-webapp-b2e6f',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:438250245621:web:a2d1a165124030538ba4bc',
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDx0Hic6YZE_TeFro-Vm5Nx7WXT2G1JnAM',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'ai-studio-applet-webapp-b2e6f.firebaseapp.com',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'ai-studio-applet-webapp-b2e6f.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '438250245621',
+const requiredEnv = (name: string): string => {
+  const value = import.meta.env[name];
+
+  if (!value) {
+    throw new Error(`Missing required Firebase environment variable: ${name}`);
+  }
+
+  return value;
 };
 
-const databaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID || 'ai-studio-d3dcadda-45c0-4936-a1b8-66d0531c6ec5';
+// Firebase configuration is supplied through a local, gitignored .env file.
+const firebaseConfig = {
+  projectId: requiredEnv('VITE_FIREBASE_PROJECT_ID'),
+  appId: requiredEnv('VITE_FIREBASE_APP_ID'),
+  apiKey: requiredEnv('VITE_FIREBASE_API_KEY'),
+  authDomain: requiredEnv('VITE_FIREBASE_AUTH_DOMAIN'),
+  storageBucket: requiredEnv('VITE_FIREBASE_STORAGE_BUCKET'),
+  messagingSenderId: requiredEnv('VITE_FIREBASE_MESSAGING_SENDER_ID'),
+};
+
+const databaseId = requiredEnv('VITE_FIREBASE_DATABASE_ID');
 
 // Initialize Firebase App singleton
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
